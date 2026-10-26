@@ -199,6 +199,11 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .edge-handle span { writing-mode: vertical-rl; font-size: 10px; font-weight: 780; letter-spacing: .08em; }
 .panel-scrim { position: fixed; inset: 0; z-index: 29; background: #0d1d1190; border: 0; }
 .preview-panel { position: fixed; z-index: 30; right: 0; top: 0; width: min(640px, 100vw); height: 100vh; height: 100dvh; background: #fff; box-shadow: -17px 0 50px #09190c2b; display: flex; flex-direction: column; }
+@media (min-width: 1000px) {
+  .app-shell.preview-is-open .workspace { margin-right: clamp(340px, 35vw, 540px); }
+  .app-shell.preview-is-open .panel-scrim { display: none; }
+  .app-shell.preview-is-open .preview-panel { width: clamp(340px, 35vw, 540px); box-shadow: -10px 0 28px #09190c16; }
+}
 .panel-header { height: 77px; flex: 0 0 77px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid var(--line); padding: 0 22px; }
 .panel-header-icon { width: 37px; height: 37px; display: grid; place-items: center; border-radius: 10px; background: #e9f4eb; color: var(--green); }
 .panel-header-copy { display: grid; gap: 3px; flex: 1; }

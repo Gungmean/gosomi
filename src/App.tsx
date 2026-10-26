@@ -57,6 +57,15 @@ export default function App() {
     }
   }, [activeId, active?.messages.length, busy])
   useEffect(() => {
+    if (!active) {
+      setPreviewOpen(false)
+      return
+    }
+    const hasDraftContent = active.draft.type !== 'general' || Object.entries(active.draft).some(([key, value]) =>
+      key !== 'type' && key !== 'selections' && typeof value === 'string' && Boolean(value.trim()))
+    setPreviewOpen(hasDraftContent)
+  }, [activeId])
+  useEffect(() => {
     if (!notice) return
     const timer = window.setTimeout(() => setNotice(''), 4500)
     return () => window.clearTimeout(timer)
@@ -138,6 +147,7 @@ export default function App() {
         draft: { ...conversation.draft, ...result.draftPatch },
         updatedAt: Date.now(),
       }))
+      if (activeId === target.id && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
       if (result.searchQuery) {
         try {
           const found = await searchPrecedents(result.searchQuery)
@@ -213,7 +223,7 @@ export default function App() {
     newConversation(type)
   }
 
-  return <div className="app-shell">
+  return <div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
         <button className="brand" onClick={() => { setActiveId(null); setSidebarOpen(false) }} aria-label="고소미 홈으로">
