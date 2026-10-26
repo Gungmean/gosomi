@@ -180,7 +180,17 @@ function parseAiOutput(output) {
     try {
       parsed = JSON.parse(source.slice(start, end + 1))
     } catch {
-      parsed = { message: source }
+      const messageMatch = source.match(/"message"\s*:\s*"((?:\\.|[^"\\])*)/)
+      if (messageMatch) {
+        const salvaged = messageMatch[1]
+          .replace(/\\n/g, '\n')
+          .replace(/\\"/g, '"')
+          .replace(/\\\\/g, '\\')
+          .trim()
+        parsed = { message: salvaged || source }
+      } else {
+        parsed = { message: source }
+      }
     }
   }
   const draftPatch = {}
@@ -212,20 +222,265 @@ function parseAiOutput(output) {
   }
 }
 
-async function callProvider(settings, messages, prompt) {
-  const provider = settings.provider
-  const model = String(settings.model || '').trim()
+function normalizeProviderAndModel(settings) {
   const apiKey = String(settings.apiKey || '').trim()
+  let rawModel = String(settings.model || '')
+    .trim()
+    .replace(/^models\//i, '')
+    .replace(/제미나이/g, 'gemini')
+    .replace(/\s+/g, '-')
+    .toLowerCase()
+
+  let provider = settings.provider
+  if (apiKey.startsWith('AIza') || /^(?:gemini|3\.[15678]|2\.[05]|4(?:-|$))/.test(rawModel)) {
+    provider = 'gemini'
+  } else if (apiKey.startsWith('sk-ant-') || rawModel.startsWith('claude')) {
+    provider = 'anthropic'
+  } else if (rawModel.startsWith('gpt-') || rawModel.startsWith('o1') || rawModel.startsWith('o3') || rawModel.startsWith('o4')) {
+    provider = 'openai'
+  }
+
+  if (provider === 'gemini') {
+    const geminiAliases = {
+      '': 'gemini-3.8-flash',
+      'gemini': 'gemini-3.8-flash',
+      'gemini-3': 'gemini-3.8-flash',
+      'gemini-3-flash': 'gemini-3.8-flash',
+      '3.8': 'gemini-3.8-flash',
+      '3.8-flash': 'gemini-3.8-flash',
+      'gemini-3.8': 'gemini-3.8-flash',
+      'gemini-3.8-pro': 'gemini-3.8-flash',
+      'gemini-3.8-flash-latest': 'gemini-3.8-flash',
+      '3.7': 'gemini-3.8-flash',
+      '3.7-flash': 'gemini-3.8-flash',
+      'gemini-3.7': 'gemini-3.8-flash',
+      'gemini-3.7-flash': 'gemini-3.8-flash',
+      '3.6': 'gemini-3.6-flash',
+      '3.6-flash': 'gemini-3.6-flash',
+      'gemini-3.6': 'gemini-3.6-flash',
+      'gemini-3.6-pro': 'gemini-3.6-flash',
+      'gemini-3.6-flash-latest': 'gemini-3.6-flash',
+      '3.5': 'gemini-3.6-flash',
+      '3.5-flash': 'gemini-3.6-flash',
+      'gemini-3.5': 'gemini-3.6-flash',
+      'gemini-3.5-flash': 'gemini-3.6-flash',
+      '3.5-lite': 'gemini-3.5-flash-lite',
+      '3.5-flash-lite': 'gemini-3.5-flash-lite',
+      'gemini-3.5-lite': 'gemini-3.5-flash-lite',
+      '3.1': 'gemini-3.1-pro-preview',
+      'gemini-3.1': 'gemini-3.1-pro-preview',
+      'gemini-3.1-pro': 'gemini-3.1-pro-preview',
+      '2.5': 'gemini-2.5-flash',
+      'gemini-2.5': 'gemini-2.5-flash',
+      '4': 'gemini-4-argon',
+      'gemini-4': 'gemini-4-argon',
+    }
+    if (geminiAliases[rawModel]) {
+      rawModel = geminiAliases[rawModel]
+    } else if (/^gemini-3\.[68]$/.test(rawModel)) {
+      rawModel = `${rawModel}-flash`
+    } else if (!rawModel.startsWith('gemini-') && !rawModel.startsWith('gemma-')) {
+      rawModel = 'gemini-3.8-flash'
+    }
+  } else if (provider === 'openai' && (!rawModel || rawModel.startsWith('gemini') || rawModel.startsWith('claude'))) {
+    rawModel = 'gpt-4.1-mini'
+  } else if (provider === 'anthropic' && (!rawModel || rawModel.startsWith('gemini') || rawModel.startsWith('gpt-'))) {
+    rawModel = 'claude-sonnet-4-5'
+  }
+
+  return { provider, model: rawModel, apiKey }
+}
+
+const geminiSafetySettings = [
+  { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
+  { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_ONLY_HIGH' },
+  { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_ONLY_HIGH' },
+  { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_ONLY_HIGH' },
+]
+
+function extractGeminiGenerateContentText(data) {
+  const parts = data?.candidates?.[0]?.content?.parts || []
+  return parts
+    .filter((item) => !item?.thought && typeof item?.text === 'string')
+    .map((item) => item.text)
+    .join('')
+    .trim()
+}
+
+function extractGeminiInteractionsText(data) {
+  if (Array.isArray(data?.steps)) {
+    const text = data.steps
+      .filter((step) => step?.type === 'model_output')
+      .flatMap((step) => Array.isArray(step?.content) ? step.content : [])
+      .filter((item) => (!item?.type || item.type === 'text') && typeof item?.text === 'string')
+      .map((item) => item.text)
+      .join('')
+      .trim()
+    if (text) return text
+  }
+  if (Array.isArray(data?.outputs)) {
+    const text = data.outputs
+      .filter((item) => (!item?.type || item.type === 'text') && typeof item?.text === 'string')
+      .map((item) => item.text)
+      .join('')
+      .trim()
+    if (text) return text
+  }
+  return ''
+}
+
+async function fetchWithRetry(url, options, maxAttempts = 3) {
+  let response
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    response = await fetch(url, {
+      ...options,
+      signal: AbortSignal.timeout(45000),
+    })
+    if (![500, 502, 503, 504].includes(response.status) || attempt === maxAttempts - 1) break
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 450 * (attempt + 1)))
+  }
+  return response
+}
+
+function throwProviderHttpError(provider, apiKey, response, data) {
+  const errorPayload = Array.isArray(data) ? data[0]?.error : data?.error
+  const providerError = errorPayload || {}
+  const providerDetail = String(providerError.message || providerError.status || '')
+    .replaceAll(apiKey, '[숨김]')
+    .replace(/\s+/g, ' ')
+    .slice(0, 180)
+  const googleApiKeyInvalid = Array.isArray(providerError.details)
+    && providerError.details.some((detail) => detail?.reason === 'API_KEY_INVALID')
+  if (response.status === 401 || response.status === 403 || googleApiKeyInvalid) {
+    throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
+  }
+  if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
+  if (response.status === 503) {
+    throw new Error(provider === 'gemini'
+      ? 'Gemini 모델에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
+      : 'AI 제공자에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.')
+  }
+  if (response.status === 404) {
+    throw new Error(`선택한 AI 모델을 찾을 수 없습니다. 제공자와 모델 이름을 확인해주세요.${providerDetail ? ` (${providerDetail})` : ''}`)
+  }
+  if (response.status >= 400 && response.status < 500) {
+    throw new Error(`AI 제공자가 요청을 거부했습니다. 제공자와 모델 설정을 확인해주세요. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
+  }
+  throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
+}
+
+async function callGemini(model, apiKey, conversation, prompt) {
+  const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
+  const userPromptText = conversation.length <= 1
+    ? (conversation[0]?.content || '안녕하세요.')
+    : `[이전 대화 기록]\n${conversation.slice(0, -1).map((item) => `${item.role === 'assistant' ? '고소미(이전 답변)' : '사용자'}: ${item.content}`).join('\n\n')}\n\n[현재 사용자 입력]\n${conversation[conversation.length - 1].content}`
+
+  const supportsThinkingLevel = /^gemini-(?:2\.5|3|4)/.test(model)
+  const thinkingLevel = model.startsWith('gemini-3.5-flash-lite') ? 'minimal' : 'low'
+  const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
+  const makeGenerateBody = (withThinking) => ({
+    systemInstruction: { parts: [{ text: prompt }] },
+    contents: [{ role: 'user', parts: [{ text: userPromptText }] }],
+    safetySettings: geminiSafetySettings,
+    generationConfig: {
+      responseMimeType: 'application/json',
+      maxOutputTokens: 8192,
+      ...(withThinking ? { thinkingConfig: { thinkingLevel } } : {}),
+    },
+  })
+
+  let response = await fetchWithRetry(generateUrl, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(makeGenerateBody(supportsThinkingLevel)),
+  })
+  let data = await response.json().catch(() => ({}))
+
+  if (!response.ok && response.status === 400 && supportsThinkingLevel) {
+    const errMsg = String((Array.isArray(data) ? data[0]?.error?.message : data?.error?.message) || '')
+    if (/thinking/i.test(errMsg)) {
+      response = await fetchWithRetry(generateUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(makeGenerateBody(false)),
+      })
+      data = await response.json().catch(() => ({}))
+    }
+  }
+
+  if (response.ok) {
+    const text = extractGeminiGenerateContentText(data)
+    if (text) return text
+    const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason
+    if (blockReason === 'SAFETY' || blockReason === 'BLOCKLIST' || blockReason === 'PROHIBITED_CONTENT') {
+      throw new Error('입력 내용에 민감한 표현이 포함되어 AI 안전 정책에 의해 응답이 제한되었습니다. 표현을 완화해 다시 시도해주세요.')
+    }
+  }
+
+  const googleKeyInvalid = (Array.isArray(data) ? data[0]?.error?.details : data?.error?.details)
+    ?.some((detail) => detail?.reason === 'API_KEY_INVALID')
+  if (!googleKeyInvalid && response.status !== 401 && response.status !== 403 && response.status !== 429) {
+    const interactionsUrl = 'https://generativelanguage.googleapis.com/v1beta/interactions'
+    const interactionsBody = {
+      model,
+      store: false,
+      system_instruction: prompt,
+      input: userPromptText,
+      generation_config: {
+        max_output_tokens: 8192,
+        ...(supportsThinkingLevel ? { thinking_level: thinkingLevel } : {}),
+      },
+      response_format: [
+        { type: 'text', mime_type: 'application/json' },
+      ],
+    }
+    const intResponse = await fetchWithRetry(interactionsUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(interactionsBody),
+    })
+    const intData = await intResponse.json().catch(() => ({}))
+    if (intResponse.ok) {
+      const intText = extractGeminiInteractionsText(intData)
+      if (intText) return intText
+    } else if (!response.ok) {
+      response = intResponse
+      data = intData
+    }
+  }
+
+  if (!response.ok) {
+    throwProviderHttpError('gemini', apiKey, response, data)
+  }
+  throw new Error('Gemini 모델로부터 유효한 응답 텍스트를 받지 못했습니다. 잠시 후 다시 시도해주세요.')
+}
+
+async function callProvider(settings, messages, prompt) {
+  const { provider, model, apiKey } = normalizeProviderAndModel(settings)
   if (!apiKey || !/^[a-zA-Z0-9._-]+$/.test(model)) {
     throw new Error('API 키와 모델 이름을 확인해주세요.')
   }
 
   let remainingChars = 18000
-  const conversation = messages.slice(-8).reverse().map((message) => {
+  const cleanedMessages = messages.filter((message) => {
+    const text = String(message?.text || '').trim()
+    if (!text) return false
+    if (message?.role === 'assistant' && text.startsWith('연결에 문제가 생겼어요.')) return false
+    return true
+  })
+  const conversation = cleanedMessages.slice(-8).reverse().map((message) => {
     const content = String(message.text || '').slice(0, Math.min(4000, remainingChars))
     remainingChars -= content.length
     return { role: message.role === 'assistant' ? 'assistant' : 'user', content }
   }).filter((message) => message.content).reverse()
+
+  if (conversation.length === 0) {
+    throw new Error('대화 내용을 확인해주세요.')
+  }
+
+  if (provider === 'gemini') {
+    return callGemini(model, apiKey, conversation, prompt)
+  }
 
   let url
   let headers
@@ -237,61 +492,22 @@ async function callProvider(settings, messages, prompt) {
   } else if (provider === 'anthropic') {
     url = 'https://api.anthropic.com/v1/messages'
     headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
-    body = { model, system: prompt, messages: conversation, max_tokens: 1800 }
-  } else if (provider === 'gemini') {
-    const isGemini36 = model.startsWith('gemini-3.6-flash')
-    url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
-    headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
-    body = {
-      systemInstruction: { parts: [{ text: prompt }] },
-      contents: conversation.map((item) => ({ role: item.role === 'assistant' ? 'model' : 'user', parts: [{ text: item.content }] })),
-      generationConfig: {
-        responseMimeType: 'application/json',
-        maxOutputTokens: isGemini36 ? 1800 : 800,
-        thinkingConfig: { thinkingLevel: isGemini36 ? 'medium' : 'low' },
-      },
-    }
+    body = { model, system: prompt, messages: conversation, max_tokens: 2400 }
   } else {
     throw new Error('지원하지 않는 AI 제공자입니다.')
   }
 
-  let response
-  const maxAttempts = provider === 'gemini' ? 3 : 1
-  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-    response = await fetch(url, {
-      method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(45000),
-    })
-    if (response.status !== 503 || attempt === maxAttempts - 1) break
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 450 * (attempt + 1)))
-  }
+  const response = await fetchWithRetry(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+  }, 1)
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    const providerError = data?.error || {}
-    const providerDetail = String(providerError.message || providerError.status || '')
-      .replaceAll(apiKey, '[숨김]')
-      .replace(/\s+/g, ' ')
-      .slice(0, 180)
-    const googleApiKeyInvalid = data?.error?.details?.some((detail) => detail?.reason === 'API_KEY_INVALID')
-    if (response.status === 401 || response.status === 403 || googleApiKeyInvalid) {
-      throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
-    }
-    if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
-    if (response.status === 503) {
-      throw new Error(provider === 'gemini'
-        ? 'Gemini 모델에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
-        : 'AI 제공자에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.')
-    }
-    if (response.status === 404) {
-      throw new Error(`선택한 AI 모델을 찾을 수 없습니다. 제공자와 모델 이름을 확인해주세요.${providerDetail ? ` (${providerDetail})` : ''}`)
-    }
-    if (response.status >= 400 && response.status < 500) {
-      throw new Error(`AI 제공자가 요청을 거부했습니다. 제공자와 모델 설정을 확인해주세요. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
-    }
-    throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
+    throwProviderHttpError(provider, apiKey, response, data)
   }
   if (provider === 'openai') return data.choices?.[0]?.message?.content || ''
-  if (provider === 'anthropic') return data.content?.map((item) => item.text || '').join('') || ''
-  return data.candidates?.[0]?.content?.parts?.map((item) => item.text || '').join('') || ''
+  return data.content?.map((item) => item.text || '').join('') || ''
 }
 
 app.post('/api/chat', async (request, response) => {

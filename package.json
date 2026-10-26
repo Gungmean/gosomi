@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"node server/index.mjs\"",
+    "dev": "concurrently -k \"vite --host 127.0.0.1\" \"node --watch server/index.mjs\"",
     "build": "tsc -b && vite build",
     "preview": "concurrently -k \"vite preview --host 127.0.0.1\" \"node server/index.mjs\""
   },

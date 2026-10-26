@@ -316,6 +316,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .provider-option:hover { background: #f8fbf8; }
 .provider-option.selected { border-color: var(--green); background: #f0f8f2; color: var(--green); }
 .settings-field { display: grid; gap: 7px; margin-bottom: 17px; font-size: 11px; font-weight: 670; color: #566057; }
+.model-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 2px; }
+.model-preset { min-height: 28px; padding: 0 10px; border: 1px solid #e0e8e1; border-radius: 99px; background: #fff; color: #58635a; font-size: 11px; font-weight: 640; transition: border-color .15s, background .15s, color .15s; }
+.model-preset:hover { border-color: #a9ccb2; background: #f8fbf8; color: var(--green); }
+.model-preset.selected { border-color: var(--green); background: #edf6ef; color: var(--green); font-weight: 700; }
 .settings-field > input, .key-input-wrap { height: 43px; border: 1px solid #e0e8e1; border-radius: 9px; background: #fff; }
 .settings-field > input { padding: 0 12px; outline: none; color: var(--ink); font-size: 12px; }
 .key-input-wrap { display: flex; align-items: center; }

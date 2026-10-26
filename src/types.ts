@@ -88,6 +88,23 @@ export const defaultModels: Record<Provider, string> = {
   gemini: 'gemini-3.8-flash',
 }
 
+export const modelPresets: Record<Provider, { value: string; label: string }[]> = {
+  gemini: [
+    { value: 'gemini-3.8-flash', label: 'Gemini 3.8 Flash' },
+    { value: 'gemini-3.6-flash', label: 'Gemini 3.6 Flash' },
+    { value: 'gemini-3.5-flash-lite', label: 'Gemini 3.5 Flash-Lite' },
+  ],
+  openai: [
+    { value: 'gpt-4.1-mini', label: 'GPT-4.1 mini' },
+    { value: 'gpt-4.1', label: 'GPT-4.1' },
+    { value: 'gpt-4o-mini', label: 'GPT-4o mini' },
+  ],
+  anthropic: [
+    { value: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5' },
+    { value: 'claude-3-5-haiku-latest', label: 'Claude 3.5 Haiku' },
+  ],
+}
+
 export const blankDraft = (): ComplaintDraft => ({
   type: 'general',
   complainantName: '',

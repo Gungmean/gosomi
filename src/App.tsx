@@ -33,7 +33,7 @@ function titleFrom(text: string) {
 export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
   const [activeId, setActiveId] = useState<string | null>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.id || null)
-  const [settings, setSettings] = useState<AiSettings>({ provider: 'openai', model: defaultModels.openai, apiKey: '' })
+  const [settings, setSettings] = useState<AiSettings>({ provider: 'gemini', model: defaultModels.gemini, apiKey: '' })
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [precedentOpen, setPrecedentOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
