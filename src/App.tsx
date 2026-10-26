@@ -46,8 +46,15 @@ export default function App() {
   const draft = active?.draft || blankDraft()
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
 
-  useEffect(() => saveConversations(conversations), [conversations])
-  useEffect(() => scrollEnd.current?.scrollIntoView({ behavior: 'smooth' }), [activeId, active?.messages.length, busy])
+  useEffect(() => {
+    saveConversations(conversations)
+  }, [conversations])
+  useEffect(() => {
+    const scrollTarget = scrollEnd.current
+    if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [activeId, active?.messages.length, busy])
   useEffect(() => {
     if (!notice) return
     const timer = window.setTimeout(() => setNotice(''), 4500)
