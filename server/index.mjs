@@ -227,7 +227,7 @@ async function callProvider(settings, messages, prompt) {
   }
 
   const response = await fetch(url, {
-    method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(55000),
+    method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(25000),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
