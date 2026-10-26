@@ -154,14 +154,15 @@ function systemPrompt(draft, precedents) {
   })) : []
   return `당신은 한국어로 대화하는 고소장 작성 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
-사건 일시, 장소, 상대방, 구체적 행위, 피해, 증거 중 가장 중요한 누락 정보 1~2개를 우선 질문하세요.
-확인된 사실과 추정, 법률적 해석을 구분하세요. 조문/판례를 기억으로 만들어 인용하지 마세요.
+사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고, 현재까지 확인된 내용으로 가능한 안내를 먼저 제공한 뒤 핵심 질문 1~2개만 덧붙이세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
+사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
+법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
 아래 verifiedCases에 있는 판례만 사건번호와 링크를 근거로 언급할 수 있습니다. 관련성이 불분명하면 언급하지 마세요.
 사용자가 명시한 정보로만 draftPatch를 채우고, 기존 값을 임의로 지우지 마세요.
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 긴급한 안전 위협이 언급되면 신속한 기관/전문가 도움을 먼저 안내하세요.
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
-{"message":"사용자에게 보일 간결한 한국어 답변","draftPatch":{"incidentDate":"..."},"searchQuery":"..."}
+{"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{"incidentDate":"..."},"searchQuery":"..."}
 허용된 draftPatch 키: ${draftFields.join(', ')}
 현재 문서 상태: ${JSON.stringify(compactDraft)}
 확인된 판례: ${JSON.stringify(verifiedCases)}`
@@ -225,6 +226,7 @@ async function callProvider(settings, messages, prompt) {
     headers = { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' }
     body = { model, system: prompt, messages: conversation, max_tokens: 1800 }
   } else if (provider === 'gemini') {
+    const isGemini36 = model.startsWith('gemini-3.6-flash')
     url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
     headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
     body = {
@@ -232,8 +234,8 @@ async function callProvider(settings, messages, prompt) {
       contents: conversation.map((item) => ({ role: item.role === 'assistant' ? 'model' : 'user', parts: [{ text: item.content }] })),
       generationConfig: {
         responseMimeType: 'application/json',
-        maxOutputTokens: 800,
-        thinkingConfig: { thinkingLevel: 'low' },
+        maxOutputTokens: isGemini36 ? 1800 : 800,
+        thinkingConfig: { thinkingLevel: isGemini36 ? 'medium' : 'low' },
       },
     }
   } else {
