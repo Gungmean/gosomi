@@ -231,16 +231,23 @@ async function callProvider(settings, messages, prompt) {
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
+    const providerError = data?.error || {}
+    const providerDetail = String(providerError.message || providerError.status || '')
+      .replaceAll(apiKey, '[숨김]')
+      .replace(/\s+/g, ' ')
+      .slice(0, 180)
     const googleApiKeyInvalid = data?.error?.details?.some((detail) => detail?.reason === 'API_KEY_INVALID')
     if (response.status === 401 || response.status === 403 || googleApiKeyInvalid) {
       throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
     }
     if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
-    if (response.status === 404) throw new Error('선택한 AI 모델을 찾을 수 없습니다. 제공자와 모델 이름을 확인해주세요.')
-    if (response.status >= 400 && response.status < 500) {
-      throw new Error(`AI 제공자가 요청을 거부했습니다. 제공자와 모델 설정을 확인해주세요. (${response.status})`)
+    if (response.status === 404) {
+      throw new Error(`선택한 AI 모델을 찾을 수 없습니다. 제공자와 모델 이름을 확인해주세요.${providerDetail ? ` (${providerDetail})` : ''}`)
     }
-    throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status})`)
+    if (response.status >= 400 && response.status < 500) {
+      throw new Error(`AI 제공자가 요청을 거부했습니다. 제공자와 모델 설정을 확인해주세요. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
+    }
+    throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
   }
   if (provider === 'openai') return data.choices?.[0]?.message?.content || ''
   if (provider === 'anthropic') return data.content?.map((item) => item.text || '').join('') || ''
