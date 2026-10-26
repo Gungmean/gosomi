@@ -255,9 +255,15 @@ async function callProvider(settings, messages, prompt) {
     throw new Error('지원하지 않는 AI 제공자입니다.')
   }
 
-  const response = await fetch(url, {
-    method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(45000),
-  })
+  let response
+  const maxAttempts = provider === 'gemini' ? 3 : 1
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    response = await fetch(url, {
+      method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(45000),
+    })
+    if (response.status !== 503 || attempt === maxAttempts - 1) break
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 450 * (attempt + 1)))
+  }
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
     const providerError = data?.error || {}
@@ -270,6 +276,11 @@ async function callProvider(settings, messages, prompt) {
       throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
     }
     if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
+    if (response.status === 503) {
+      throw new Error(provider === 'gemini'
+        ? 'Gemini 모델에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
+        : 'AI 제공자에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.')
+    }
     if (response.status === 404) {
       throw new Error(`선택한 AI 모델을 찾을 수 없습니다. 제공자와 모델 이름을 확인해주세요.${providerDetail ? ` (${providerDetail})` : ''}`)
     }
