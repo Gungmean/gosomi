@@ -236,6 +236,10 @@ async function callProvider(settings, messages, prompt) {
       throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
     }
     if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
+    if (response.status === 404) throw new Error('선택한 AI 모델을 찾을 수 없습니다. 제공자와 모델 이름을 확인해주세요.')
+    if (response.status >= 400 && response.status < 500) {
+      throw new Error(`AI 제공자가 요청을 거부했습니다. 제공자와 모델 설정을 확인해주세요. (${response.status})`)
+    }
     throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status})`)
   }
   if (provider === 'openai') return data.choices?.[0]?.message?.content || ''
@@ -253,10 +257,15 @@ app.post('/api/chat', async (request, response) => {
     const output = await callProvider(settings, messages, systemPrompt(draft, precedents))
     response.json(parseAiOutput(output))
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.'
+    const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+    const message = timedOut ? 'AI 응답이 제한 시간 안에 도착하지 않았습니다. 잠시 후 다시 시도해주세요.'
+      : error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.'
     const status = message.startsWith('API 키가 유효하지 않습니다.') ? 401
       : message.startsWith('AI 제공자의 요청 한도') ? 429
-        : 502
+        : message.startsWith('AI 제공자가 요청을 거부했습니다.') ? 400
+          : message.startsWith('선택한 AI 모델을 찾을 수 없습니다.') ? 400
+          : timedOut ? 504
+            : 502
     response.status(status).json({ error: message })
   }
 })
