@@ -1,5 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
+import { resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -252,6 +254,11 @@ app.post('/api/chat', async (request, response) => {
   }
 })
 
-app.listen(port, '127.0.0.1', () => {
-  process.stdout.write(`Gosomi API listening at http://127.0.0.1:${port}\n`)
-})
+export default app
+
+const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])
+if (isDirectRun) {
+  app.listen(port, '127.0.0.1', () => {
+    process.stdout.write(`Gosomi API listening at http://127.0.0.1:${port}\n`)
+  })
+}
