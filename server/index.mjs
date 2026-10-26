@@ -140,9 +140,17 @@ const draftFields = [
 ]
 
 function systemPrompt(draft, precedents) {
-  const verifiedCases = Array.isArray(precedents) ? precedents.slice(0, 6).map((item) => ({
-    title: item.title, caseNumber: item.caseNumber, court: item.court,
-    decidedAt: item.decidedAt, summary: item.summary, summaryKind: item.summaryKind, url: item.url,
+  const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
+    if (typeof value === 'string' && value.trim()) return [[key, value.slice(0, 1200)]]
+    if (key === 'selections' && value && typeof value === 'object') {
+      const selections = Object.fromEntries(Object.entries(value).filter(([, item]) => typeof item === 'string' && item.trim()).map(([name, item]) => [name, item.slice(0, 120)]))
+      if (Object.keys(selections).length) return [[key, selections]]
+    }
+    return []
+  }))
+  const verifiedCases = Array.isArray(precedents) ? precedents.slice(0, 4).map((item) => ({
+    title: String(item.title || '').slice(0, 160), caseNumber: String(item.caseNumber || '').slice(0, 80), court: String(item.court || '').slice(0, 80),
+    decidedAt: String(item.decidedAt || '').slice(0, 40), summary: String(item.summary || '').slice(0, 450), summaryKind: item.summaryKind, url: String(item.url || '').slice(0, 300),
   })) : []
   return `당신은 한국어로 대화하는 고소장 작성 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
@@ -155,7 +163,7 @@ function systemPrompt(draft, precedents) {
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
 {"message":"사용자에게 보일 간결한 한국어 답변","draftPatch":{"incidentDate":"..."},"searchQuery":"..."}
 허용된 draftPatch 키: ${draftFields.join(', ')}
-현재 문서 상태: ${JSON.stringify(draft || {})}
+현재 문서 상태: ${JSON.stringify(compactDraft)}
 확인된 판례: ${JSON.stringify(verifiedCases)}`
 }
 
@@ -198,10 +206,12 @@ async function callProvider(settings, messages, prompt) {
     throw new Error('API 키와 모델 이름을 확인해주세요.')
   }
 
-  const conversation = messages.slice(-14).map((message) => ({
-    role: message.role === 'assistant' ? 'assistant' : 'user',
-    content: String(message.text || '').slice(0, 9000),
-  }))
+  let remainingChars = 18000
+  const conversation = messages.slice(-8).reverse().map((message) => {
+    const content = String(message.text || '').slice(0, Math.min(4000, remainingChars))
+    remainingChars -= content.length
+    return { role: message.role === 'assistant' ? 'assistant' : 'user', content }
+  }).filter((message) => message.content).reverse()
 
   let url
   let headers
@@ -222,7 +232,7 @@ async function callProvider(settings, messages, prompt) {
       contents: conversation.map((item) => ({ role: item.role === 'assistant' ? 'model' : 'user', parts: [{ text: item.content }] })),
       generationConfig: {
         responseMimeType: 'application/json',
-        maxOutputTokens: 1200,
+        maxOutputTokens: 800,
         thinkingConfig: { thinkingLevel: 'low' },
       },
     }
