@@ -29,6 +29,22 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   text: string
   createdAt: number
+  followUpQuestions?: FollowUpQuestion[]
+  followUpAnswers?: Record<string, FollowUpAnswer>
+  followUpSubmitted?: boolean
+}
+
+export interface FollowUpQuestion {
+  id: string
+  text: string
+  answerType: 'yes_no' | 'text'
+  placeholder?: string
+  detailPrompt?: string
+}
+
+export interface FollowUpAnswer {
+  choice?: 'yes' | 'no' | 'unknown'
+  text?: string
 }
 
 export interface Precedent {

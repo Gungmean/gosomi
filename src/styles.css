@@ -124,6 +124,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .message-row { display: flex; align-items: flex-start; gap: 10px; }
 .message-row.user { justify-content: flex-end; }
 .assistant-avatar { width: 31px; height: 31px; border-radius: 9px; flex: 0 0 31px; display: grid; place-items: center; color: var(--green); background: #e9f4eb; }
+.message-content-stack { min-width: 0; }
+.message-row.assistant .message-content-stack { flex: 1; }
+.message-row.user .message-content-stack { max-width: min(85%, 640px); }
 .message-bubble { max-width: min(100%, 640px); min-width: 0; }
 .message-row.user .message-bubble { background: #f3f6f3; border-radius: 15px 4px 15px 15px; padding: 13px 17px; color: #272d28; }
 .message-row.assistant .message-bubble { padding: 0 4px 0 0; }
@@ -137,6 +140,30 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .message-body a { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
 .message-time { display: block; margin-top: 9px; font-size: 10px; color: #a3aaa4; }
 .message-row.user .message-time { text-align: right; }
+.followup-card { width: min(100%, 590px); margin-top: 14px; padding: 15px; border: 1px solid #e1ebe3; border-radius: 13px; background: #fbfdfb; }
+.followup-card.submitted { background: #f7faf7; }
+.followup-heading { display: flex; align-items: baseline; gap: 9px; margin-bottom: 12px; }
+.followup-heading strong { color: #294a30; font-size: 12px; font-weight: 750; }
+.followup-heading span { color: #929c94; font-size: 11px; }
+.followup-list { display: grid; gap: 14px; }
+.followup-question { padding-top: 12px; border-top: 1px solid #edf1ed; }
+.followup-question:first-child { padding-top: 0; border-top: 0; }
+.followup-question-title { display: flex; align-items: flex-start; gap: 8px; color: #28322a; font-size: 13px; line-height: 1.55; }
+.followup-question-title > span { width: 19px; height: 19px; flex: 0 0 19px; margin-top: 1px; border-radius: 6px; display: grid; place-items: center; background: #edf5ee; color: var(--green); font-size: 10px; font-weight: 700; }
+.followup-question-title strong { font-weight: 650; }
+.followup-options { display: flex; gap: 7px; flex-wrap: wrap; margin: 9px 0 0 27px; }
+.followup-options button { min-height: 30px; padding: 0 12px; border: 1px solid #dce6de; border-radius: 100px; background: #fff; color: #5c685f; font-size: 11px; transition: border-color .15s, background .15s, color .15s; }
+.followup-options button:hover:not(:disabled) { border-color: #a9c9af; color: var(--green); }
+.followup-options button.selected { border-color: #006617; background: #edf6ef; color: #005813; font-weight: 700; }
+.followup-options button:disabled { cursor: default; opacity: .78; }
+.followup-detail { display: grid; gap: 6px; margin: 9px 0 0 27px; }
+.followup-detail span { color: #78847a; font-size: 11px; line-height: 1.45; }
+.followup-detail input, .followup-detail textarea { width: 100%; min-height: 38px; resize: vertical; padding: 9px 11px; border: 1px solid #dfe8e0; border-radius: 9px; outline: 0; background: #fff; color: #29322b; font: inherit; font-size: 12px; line-height: 1.5; }
+.followup-detail input:focus, .followup-detail textarea:focus { border-color: #85ae8d; box-shadow: 0 0 0 3px #0066170e; }
+.followup-detail input::placeholder, .followup-detail textarea::placeholder { color: #a4ada5; }
+.followup-submit { min-height: 34px; margin: 13px 0 0 27px; padding: 0 12px; border: 0; border-radius: 9px; display: inline-flex; align-items: center; gap: 6px; background: #006617; color: #fff; font-size: 11px; font-weight: 680; }
+.followup-submit:hover:not(:disabled) { background: #005813; }
+.followup-submit:disabled { background: #e2e9e3; color: #9da89f; cursor: not-allowed; }
 .typing-bubble { display: flex; align-items: center; gap: 5px; height: 30px; }
 .typing-bubble span { width: 6px; height: 6px; border-radius: 50%; background: #90b99a; animation: typing 1.2s infinite; }
 .typing-bubble span:nth-child(2) { animation-delay: .18s; }
@@ -356,6 +383,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .composer-note { font-size: 9px; }
   .stream-intro small { display: none; }
   .message-stream { padding: 23px 19px 38px; }
+  .followup-card { padding: 13px; }
+  .followup-heading { align-items: flex-start; flex-direction: column; gap: 2px; }
+  .followup-options { margin-left: 0; }
+  .followup-detail, .followup-submit { margin-left: 0; }
   .edge-handle { top: 41%; width: 41px; height: 96px; }
   .edge-handle:hover { width: 43px; }
   .preview-panel { width: 100vw; }

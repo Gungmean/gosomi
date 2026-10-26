@@ -7,10 +7,11 @@ import {
 } from 'lucide-react'
 import { askAi, searchPrecedents } from './api'
 import ComplaintPanel from './components/ComplaintPanel'
+import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
 import { loadConversations, saveConversations } from './storage'
-import type { AiSettings, ChatMessage, ComplaintDraft, ComplaintType, Conversation, Precedent } from './types'
+import type { AiSettings, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent } from './types'
 import { blankDraft, createConversation, defaultModels } from './types'
 
 function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
@@ -97,8 +98,11 @@ export default function App() {
     updateConversation(target.id, (conversation) => ({ ...conversation, precedents: results, updatedAt: Date.now() }))
   }
 
-  async function handleSend() {
-    const text = input.trim()
+  async function handleSend(
+    messageText?: string,
+    followUpSubmission?: { messageId: string; answers: Record<string, FollowUpAnswer> },
+  ) {
+    const text = (messageText ?? input).trim()
     if (!text || busy) return
     if (!settings.apiKey.trim()) {
       setSettingsOpen(true)
@@ -111,20 +115,26 @@ export default function App() {
       setActiveId(target.id)
     }
     const userMessage = makeMessage('user', text)
-    const messages = [...target.messages, userMessage]
     updateConversation(target.id, (conversation) => ({
       ...conversation,
       title: conversation.title === '새 대화' ? titleFrom(text) : conversation.title,
-      messages,
+      messages: [
+        ...conversation.messages.map((message) => message.id === followUpSubmission?.messageId
+          ? { ...message, followUpSubmitted: true, followUpAnswers: followUpSubmission.answers }
+          : message),
+        userMessage,
+      ],
       updatedAt: Date.now(),
     }))
     setInput('')
     setBusy(true)
     try {
-      const result = await askAi(settings, messages, target.draft, target.precedents)
+      const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents)
+      const assistantMessage = makeMessage('assistant', result.message)
+      assistantMessage.followUpQuestions = result.followUpQuestions
       updateConversation(target.id, (conversation) => ({
         ...conversation,
-        messages: [...conversation.messages, makeMessage('assistant', result.message)],
+        messages: [...conversation.messages, assistantMessage],
         draft: { ...conversation.draft, ...result.draftPatch },
         updatedAt: Date.now(),
       }))
@@ -149,6 +159,34 @@ export default function App() {
     } finally {
       setBusy(false)
     }
+  }
+
+  function updateFollowUpAnswer(messageId: string, questionId: string, answer: FollowUpAnswer) {
+    if (!activeId) return
+    updateConversation(activeId, (conversation) => ({
+      ...conversation,
+      messages: conversation.messages.map((message) => message.id === messageId
+        ? { ...message, followUpAnswers: { ...message.followUpAnswers, [questionId]: answer } }
+        : message),
+    }))
+  }
+
+  function submitFollowUp(message: ChatMessage) {
+    const questions: FollowUpQuestion[] = message.followUpQuestions || []
+    const answers = message.followUpAnswers || {}
+    const complete = questions.length > 0 && questions.every((question) => question.answerType === 'text'
+      ? Boolean(answers[question.id]?.text?.trim())
+      : Boolean(answers[question.id]?.choice))
+    if (!complete || message.followUpSubmitted) return
+
+    const responseText = questions.map((question, index) => {
+      const answer = answers[question.id] || {}
+      if (question.answerType === 'text') return `${index + 1}. ${question.text}\n답변: ${answer.text?.trim()}`
+      const choice = answer.choice === 'yes' ? '예' : answer.choice === 'no' ? '아니오' : '잘 모르겠어요'
+      const detail = answer.choice === 'yes' && answer.text?.trim() ? `\n추가 설명: ${answer.text.trim()}` : ''
+      return `${index + 1}. ${question.text}\n답변: ${choice}${detail}`
+    }).join('\n\n')
+    void handleSend(responseText, { messageId: message.id, answers })
   }
 
   function deleteConversation(id: string) {
@@ -238,7 +276,7 @@ export default function App() {
           </div>
           <div className="landing-composer">
             <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
-            <div className="landing-composer-footer"><span>상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={handleSend}><Send size={18} /></button></div>
+            <div className="landing-composer-footer"><span>상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
             <button onClick={() => setPrecedentOpen(true)}><BookOpen size={16} /> 판례 먼저 찾아보기</button>
@@ -249,10 +287,20 @@ export default function App() {
           <div className="stream-intro"><span>사건 기록</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
           {active.messages.map((message) => <div className={`message-row ${message.role}`} key={message.id}>
             {message.role === 'assistant' && <span className="assistant-avatar"><Scale size={17} /></span>}
-            <div className="message-bubble">
-              {message.role === 'assistant' && <span className="message-author">고소미</span>}
-              <div className="message-body"><ReactMarkdown>{message.text}</ReactMarkdown></div>
-              <span className="message-time">{new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}</span>
+            <div className="message-content-stack">
+              <div className="message-bubble">
+                {message.role === 'assistant' && <span className="message-author">고소미</span>}
+                <div className="message-body"><ReactMarkdown>{message.text}</ReactMarkdown></div>
+                <span className="message-time">{new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}</span>
+              </div>
+              {message.role === 'assistant' && Boolean(message.followUpQuestions?.length) && <FollowUpQuestions
+                questions={message.followUpQuestions || []}
+                answers={message.followUpAnswers || {}}
+                submitted={Boolean(message.followUpSubmitted)}
+                busy={busy}
+                onAnswer={(questionId, answer) => updateFollowUpAnswer(message.id, questionId, answer)}
+                onSubmit={() => submitFollowUp(message)}
+              />}
             </div>
           </div>)}
           {busy && <div className="message-row assistant"><span className="assistant-avatar"><Scale size={17} /></span><div className="typing-bubble"><span /><span /><span /></div></div>}
@@ -268,7 +316,7 @@ export default function App() {
         </div>
         <div className="composer">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
-          <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy} onClick={handleSend}><Send size={18} /></button></div>
+          <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
         </div>
         <p className="composer-note">작성된 사실관계와 초안은 제출 전에 직접 확인해주세요.</p>
       </div> : null}

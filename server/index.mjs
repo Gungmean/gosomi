@@ -161,8 +161,9 @@ function systemPrompt(draft, precedents) {
 사용자가 명시한 정보로만 draftPatch를 채우고, 기존 값을 임의로 지우지 마세요.
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 긴급한 안전 위협이 언급되면 신속한 기관/전문가 도움을 먼저 안내하세요.
+필요한 확인 질문은 최대 4개까지 questions에 구조화하세요. 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
-{"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{"incidentDate":"..."},"searchQuery":"..."}
+{"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{"incidentDate":"..."},"searchQuery":"","questions":[{"id":"q1","text":"치료를 받으셨나요?","answerType":"yes_no","detailPrompt":"어느 병원에서 어떤 치료를 받으셨나요?"}]}
 허용된 draftPatch 키: ${draftFields.join(', ')}
 현재 문서 상태: ${JSON.stringify(compactDraft)}
 확인된 판례: ${JSON.stringify(verifiedCases)}`
@@ -196,6 +197,18 @@ function parseAiOutput(output) {
     message: String(parsed?.message || '내용을 조금 더 자세히 알려주시겠어요?').slice(0, 12000),
     draftPatch,
     searchQuery: String(parsed?.searchQuery || '').slice(0, 80),
+    followUpQuestions: (Array.isArray(parsed?.questions) ? parsed.questions : []).slice(0, 4).flatMap((question, index) => {
+      const text = String(question?.text || '').trim().slice(0, 240)
+      if (!text) return []
+      const answerType = question?.answerType === 'text' ? 'text' : 'yes_no'
+      return [{
+        id: String(question?.id || `q${index + 1}`).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 32) || `q${index + 1}`,
+        text,
+        answerType,
+        placeholder: String(question?.placeholder || '').trim().slice(0, 160),
+        detailPrompt: String(question?.detailPrompt || '').trim().slice(0, 160),
+      }]
+    }),
   }
 }
 
