@@ -220,14 +220,18 @@ async function callProvider(settings, messages, prompt) {
     body = {
       systemInstruction: { parts: [{ text: prompt }] },
       contents: conversation.map((item) => ({ role: item.role === 'assistant' ? 'model' : 'user', parts: [{ text: item.content }] })),
-      generationConfig: { responseMimeType: 'application/json' },
+      generationConfig: {
+        responseMimeType: 'application/json',
+        maxOutputTokens: 1200,
+        thinkingConfig: { thinkingLevel: 'low' },
+      },
     }
   } else {
     throw new Error('지원하지 않는 AI 제공자입니다.')
   }
 
   const response = await fetch(url, {
-    method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(25000),
+    method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(45000),
   })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
