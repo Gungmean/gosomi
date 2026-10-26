@@ -229,12 +229,15 @@ async function callProvider(settings, messages, prompt) {
   const response = await fetch(url, {
     method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(55000),
   })
+  const data = await response.json().catch(() => ({}))
   if (!response.ok) {
-    if (response.status === 401 || response.status === 403) throw new Error('API 키가 유효한지 확인해주세요.')
+    const googleApiKeyInvalid = data?.error?.details?.some((detail) => detail?.reason === 'API_KEY_INVALID')
+    if (response.status === 401 || response.status === 403 || googleApiKeyInvalid) {
+      throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
+    }
     if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
     throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status})`)
   }
-  const data = await response.json()
   if (provider === 'openai') return data.choices?.[0]?.message?.content || ''
   if (provider === 'anthropic') return data.content?.map((item) => item.text || '').join('') || ''
   return data.candidates?.[0]?.content?.parts?.map((item) => item.text || '').join('') || ''
@@ -250,7 +253,11 @@ app.post('/api/chat', async (request, response) => {
     const output = await callProvider(settings, messages, systemPrompt(draft, precedents))
     response.json(parseAiOutput(output))
   } catch (error) {
-    response.status(502).json({ error: error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.' })
+    const message = error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.'
+    const status = message.startsWith('API 키가 유효하지 않습니다.') ? 401
+      : message.startsWith('AI 제공자의 요청 한도') ? 429
+        : 502
+    response.status(status).json({ error: message })
   }
 })
 
