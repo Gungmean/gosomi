@@ -223,7 +223,7 @@ function parseAiOutput(output) {
 }
 
 function normalizeProviderAndModel(settings) {
-  const apiKey = String(settings.apiKey || '').trim()
+  const apiKey = String(settings.apiKey || '').replace(/\s+/g, '')
   let rawModel = String(settings.model || '')
     .trim()
     .replace(/^models\//i, '')
@@ -503,7 +503,10 @@ async function callGemini(model, apiKey, conversation, prompt) {
 
 async function callProvider(settings, messages, prompt) {
   const { provider, model, apiKey } = normalizeProviderAndModel(settings)
-  if (!apiKey || !/^[a-zA-Z0-9._-]+$/.test(model)) {
+  if (!apiKey || !/^[\x21-\x7E]{10,}$/.test(apiKey)) {
+    throw new Error('API 키 형식이 올바르지 않습니다. 한글이나 공백이 아닌 영문·숫자로 된 API 키(예: AIza...)를 입력해주세요.')
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(model)) {
     throw new Error('API 키와 모델 이름을 확인해주세요.')
   }
 
@@ -569,7 +572,7 @@ app.post('/api/chat', async (request, response) => {
     const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
     const message = timedOut ? 'AI 응답이 제한 시간 안에 도착하지 않았습니다. 잠시 후 다시 시도해주세요.'
       : error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.'
-    const status = message.startsWith('API 키가 유효하지 않습니다.') ? 401
+    const status = message.startsWith('API 키') ? 401
       : message.includes('한도') ? 429
         : message.startsWith('AI 제공자가 요청을 거부했습니다.') ? 400
           : message.startsWith('선택한 AI 모델을 찾을 수 없습니다.') ? 400

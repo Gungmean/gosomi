@@ -12,9 +12,9 @@ import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
 import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
-import { loadConversations, saveConversations } from './storage'
+import { isValidApiKeyFormat, loadConversations, loadSettings, saveConversations, saveSettings } from './storage'
 import type { AiSettings, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent } from './types'
-import { blankDraft, createConversation, defaultModels } from './types'
+import { blankDraft, createConversation } from './types'
 
 function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
   return { id: crypto.randomUUID(), role, text, createdAt: Date.now() }
@@ -35,7 +35,7 @@ function titleFrom(text: string) {
 export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
   const [activeId, setActiveId] = useState<string | null>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.id || null)
-  const [settings, setSettings] = useState<AiSettings>({ provider: 'gemini', model: defaultModels.gemini, apiKey: '' })
+  const [settings, setSettings] = useState<AiSettings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [precedentOpen, setPrecedentOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -83,6 +83,9 @@ export default function App() {
   useEffect(() => {
     saveConversations(conversations)
   }, [conversations])
+  useEffect(() => {
+    saveSettings(settings)
+  }, [settings])
   useEffect(() => {
     scrollToBottom(false)
   }, [activeId, active?.messages.length, busy])
@@ -150,9 +153,16 @@ export default function App() {
   ) {
     const text = (messageText ?? input).trim()
     if (!text || busy) return
-    if (!settings.apiKey.trim()) {
+    const cleanApiKey = settings.apiKey.replace(/\s+/g, '')
+    if (!cleanApiKey) {
       setSettingsOpen(true)
       setNotice('대화를 시작하려면 AI API 키를 입력해주세요.')
+      return
+    }
+    if (!isValidApiKeyFormat(cleanApiKey)) {
+      setSettings((current) => ({ ...current, apiKey: '' }))
+      setSettingsOpen(true)
+      setNotice('API 키 입력란에 한글이나 잘못된 문자가 들어갔습니다. 영문·숫자로 된 API 키(예: AIza...)를 다시 입력해주세요.')
       return
     }
     const target = active || createConversation(startType)

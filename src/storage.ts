@@ -1,7 +1,42 @@
-import type { Conversation } from './types'
-import { blankDraft } from './types'
+import type { AiSettings, Conversation } from './types'
+import { blankDraft, defaultModels } from './types'
 
 const STORAGE_KEY = 'gosomi.conversations.v1'
+const SETTINGS_KEY = 'gosomi.settings.v1'
+
+export function isValidApiKeyFormat(value: string): boolean {
+  const cleaned = value.replace(/\s+/g, '')
+  return /^[\x21-\x7E]{10,}$/.test(cleaned)
+}
+
+export function loadSettings(): AiSettings {
+  const fallback: AiSettings = { provider: 'gemini', model: defaultModels.gemini, apiKey: '' }
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY)
+    if (!raw) return fallback
+    const parsed = JSON.parse(raw) as Partial<AiSettings>
+    const provider = parsed.provider === 'openai' || parsed.provider === 'anthropic' ? parsed.provider : 'gemini'
+    const model = typeof parsed.model === 'string' && parsed.model.trim() ? parsed.model.trim() : defaultModels[provider]
+    const rawKey = typeof parsed.apiKey === 'string' ? parsed.apiKey.replace(/\s+/g, '') : ''
+    const apiKey = isValidApiKeyFormat(rawKey) ? rawKey : ''
+    return { provider, model, apiKey }
+  } catch {
+    return fallback
+  }
+}
+
+export function saveSettings(settings: AiSettings) {
+  try {
+    const cleanKey = settings.apiKey.replace(/\s+/g, '')
+    localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+      provider: settings.provider,
+      model: settings.model,
+      apiKey: isValidApiKeyFormat(cleanKey) ? cleanKey : '',
+    }))
+  } catch {
+    // Ignore storage errors
+  }
+}
 
 export function loadConversations(): Conversation[] {
   try {

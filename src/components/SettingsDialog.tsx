@@ -68,6 +68,8 @@ export default function SettingsDialog({ open, onOpenChange, settings, onChange 
   }
 
   const presets = modelPresets[settings.provider] || []
+  const trimmedKey = settings.apiKey.trim()
+  const hasNonAsciiKey = Boolean(trimmedKey) && !/^[\x21-\x7E\s]+$/.test(trimmedKey)
 
   return <Dialog.Root open={open} onOpenChange={onOpenChange}>
     <Dialog.Portal>
@@ -96,10 +98,17 @@ export default function SettingsDialog({ open, onOpenChange, settings, onChange 
           </div>}
           <input aria-label="모델" value={settings.model} onChange={(event) => handleModelChange(event.target.value)} placeholder="모델 이름 (예: gemini-3.8-flash, gemini-3.6-flash)" />
         </div>
-        <label className="settings-field"><span>API 키</span><div className="key-input-wrap"><input type={showKey ? 'text' : 'password'} value={settings.apiKey} onChange={(event) => handleKeyChange(event.target.value)} placeholder="API 키를 입력해주세요" autoComplete="off" /><button type="button" className="icon-button" aria-label={showKey ? 'API 키 숨기기' : 'API 키 보기'} onClick={() => setShowKey((value) => !value)}>{showKey ? <EyeOff size={18} /> : <Eye size={18} />}</button></div></label>
+        <label className="settings-field">
+          <span>API 키</span>
+          <div className="key-input-wrap">
+            <input type={showKey || hasNonAsciiKey ? 'text' : 'password'} value={settings.apiKey} onChange={(event) => handleKeyChange(event.target.value)} placeholder="영문·숫자로 된 API 키 입력 (예: AIzaSy...)" autoComplete="off" />
+            <button type="button" className="icon-button" aria-label={showKey ? 'API 키 숨기기' : 'API 키 보기'} onClick={() => setShowKey((value) => !value)}>{showKey ? <EyeOff size={18} /> : <Eye size={18} />}</button>
+          </div>
+          {hasNonAsciiKey && <small style={{ color: '#c83a32', fontWeight: 600 }}>API 키 입력란에 한글이 입력되었습니다. 대화 내용이 아닌 영문·숫자 API 키(예: AIza...)를 붙여넣어 주세요.</small>}
+        </label>
 
-        <div className="settings-security"><ShieldCheck size={18} /><span>키는 이 브라우저 화면의 메모리에만 보관됩니다. 새로고침하면 지워지며, 요청 시 로컬 중계 서버를 거쳐 선택한 AI 제공자에게 전달됩니다.</span></div>
-        <button className="dialog-primary" type="button" onClick={() => onOpenChange(false)}>설정 완료</button>
+        <div className="settings-security"><ShieldCheck size={18} /><span>키는 이 브라우저에 안전하게 보관되며, 요청 시 중계 서버를 거쳐 선택한 AI 제공자에게만 전달됩니다.</span></div>
+        <button className="dialog-primary" type="button" disabled={hasNonAsciiKey} onClick={() => onOpenChange(false)}>설정 완료</button>
       </Dialog.Content>
     </Dialog.Portal>
   </Dialog.Root>
