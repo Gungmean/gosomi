@@ -423,15 +423,12 @@ async function callGemini(model, apiKey, conversation, prompt) {
     ? (conversation[0]?.content || '안녕하세요.')
     : `[이전 대화 기록]\n${conversation.slice(0, -1).map((item) => `${item.role === 'assistant' ? '고소미(이전 답변)' : '사용자'}: ${item.content}`).join('\n\n')}\n\n[현재 사용자 입력]\n${conversation[conversation.length - 1].content}`
 
-  // Fallback across Gemini Flash models when a specific model hits 429 (quota/rate limit), 503 (overload), or 404
+  // Fallback across active Gemini 3.x Flash models when a specific model hits 429 (quota/rate limit) or 503 (overload)
   const candidateModels = [
     model,
     'gemini-3.8-flash',
     'gemini-3.6-flash',
     'gemini-3.5-flash-lite',
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-lite',
-    'gemini-2.0-flash',
   ].filter((candidate, index, list) => Boolean(candidate) && list.indexOf(candidate) === index)
 
   let lastResponse = null
@@ -440,8 +437,10 @@ async function callGemini(model, apiKey, conversation, prompt) {
   for (let i = 0; i < candidateModels.length; i += 1) {
     const candidate = candidateModels[i]
     const { response, data } = await callGeminiSingleModel(candidate, apiKey, userPromptText, prompt)
-    lastResponse = response
-    lastData = data
+    if (!lastResponse || response.status !== 404) {
+      lastResponse = response
+      lastData = data
+    }
 
     if (response.ok) {
       const text = extractGeminiGenerateContentText(data)
@@ -493,16 +492,6 @@ async function callGemini(model, apiKey, conversation, prompt) {
     if (intResponse.ok) {
       const intText = extractGeminiInteractionsText(intData)
       if (intText) return intText
-    }
-  }
-
-  // If all candidate models returned 429, wait briefly and retry once with gemini-2.5-flash
-  if (lastResponse && lastResponse.status === 429) {
-    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1200))
-    const retry = await callGeminiSingleModel('gemini-2.5-flash', apiKey, userPromptText, prompt)
-    if (retry.response.ok) {
-      const retryText = extractGeminiGenerateContentText(retry.data)
-      if (retryText) return retryText
     }
   }
 
