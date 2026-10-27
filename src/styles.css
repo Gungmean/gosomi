@@ -138,6 +138,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .message-body li { margin: 4px 0; }
 .message-body strong { font-weight: 730; }
 .message-body a { color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+.message-body.is-typing { cursor: pointer; }
+.message-body.is-typing > p:last-child::after,
+.message-body.is-typing > ul:last-child > li:last-child::after,
+.message-body.is-typing > ol:last-child > li:last-child::after,
+.message-body.is-typing > h1:last-child::after,
+.message-body.is-typing > h2:last-child::after,
+.message-body.is-typing > h3:last-child::after {
+  content: '▍';
+  display: inline-block;
+  margin-left: 2px;
+  color: var(--green);
+  font-weight: 400;
+  animation: cursor-blink .75s steps(2, start) infinite;
+}
+@keyframes cursor-blink { 50% { opacity: 0; } }
+.document-typing-active {
+  background: #e7f6ea;
+  color: #0b4f1b;
+  border-radius: 2px;
+  padding: 0 2px;
+  transition: background .25s ease;
+}
 .message-time { display: block; margin-top: 9px; font-size: 10px; color: #a3aaa4; }
 .message-row.user .message-time { text-align: right; }
 .followup-card { width: min(100%, 590px); margin-top: 14px; padding: 15px; border: 1px solid #e1ebe3; border-radius: 13px; background: #fbfdfb; }

@@ -30,9 +30,17 @@ const fields: { key: Field; label: string; group: string; multiline?: boolean; p
   { key: 'relatedCase', label: '관련 수사·재판', group: '증거와 요청' },
 ]
 
-export default function ComplaintPanel({ draft, open, onOpen, onClose, onChange }: {
+export default function ComplaintPanel({
+  draft,
+  open,
+  animatedFields,
+  onOpen,
+  onClose,
+  onChange,
+}: {
   draft: ComplaintDraft
   open: boolean
+  animatedFields?: Record<string, string>
   onOpen: () => void
   onClose: () => void
   onChange: (patch: Partial<ComplaintDraft>) => void
@@ -94,7 +102,7 @@ export default function ComplaintPanel({ draft, open, onOpen, onClose, onChange 
               </Tabs.List>
               <Tabs.Content value="preview" className="panel-content panel-preview-scroll">
                 <div className="preview-notice"><span className="preview-notice-dot" /> 실시간 초안 {draft.type !== 'general' ? <a href={officialFormSource} target="_blank" rel="noreferrer">경찰청 원본 양식 보기</a> : <span className="preview-form-caveat">일반 초안 · 공식 서식과 다름</span>}</div>
-                <ComplaintDocument draft={draft} onFieldClick={jumpToField} />
+                <ComplaintDocument draft={draft} animatedFields={animatedFields} onFieldClick={jumpToField} />
               </Tabs.Content>
               <Tabs.Content value="edit" className="panel-content panel-edit-scroll">
                 <div className="form-intro"><strong>문서 내용 수정</strong><p>내용을 바꾸면 미리보기에 즉시 반영됩니다.</p></div>

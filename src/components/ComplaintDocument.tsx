@@ -1,6 +1,7 @@
 import type { ComplaintDraft, ComplaintType } from '../types'
 import { templateLabels } from '../types'
 import { checklistQuestions, officialFormSource } from '../formConfig'
+import { TypedDocumentText } from './TypewriterText'
 
 const policeFormsUrl = 'https://minwon24.police.go.kr/cvlcpt/cvlcptTmpltGdList.do'
 const officialPages: Record<Exclude<ComplaintType, 'general'>, [string, string]> = {
@@ -13,12 +14,13 @@ type Position = { left: string; top: string; width?: string; height?: string; si
 type OverlayField = { field: string; value: string; position: Position; multiline?: boolean }
 
 function OfficialPage({
-  src, pageNumber, fields, marks = [], onFieldClick,
+  src, pageNumber, fields, marks = [], animatedFields, onFieldClick,
 }: {
   src: string
   pageNumber: number
   fields: OverlayField[]
   marks?: Position[]
+  animatedFields?: Record<string, string>
   onFieldClick: (field: string) => void
 }) {
   return <div className="official-page" aria-label={`경찰청 간이 고소장 ${pageNumber}쪽`}>
@@ -31,11 +33,19 @@ function OfficialPage({
       style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size }}
       title={`${field} 내용 수정`}
       onClick={() => onFieldClick(field)}
-    >{value}</button>)}
+    ><TypedDocumentText text={value} animateKey={animatedFields?.[field]} /></button>)}
   </div>
 }
 
-function OfficialComplaint({ draft, onFieldClick }: { draft: ComplaintDraft; onFieldClick: (field: string) => void }) {
+function OfficialComplaint({
+  draft,
+  animatedFields,
+  onFieldClick,
+}: {
+  draft: ComplaintDraft
+  animatedFields?: Record<string, string>
+  onFieldClick: (field: string) => void
+}) {
   const type = draft.type as Exclude<ComplaintType, 'general'>
   const positions: Record<Exclude<ComplaintType, 'general'>, { first: Record<string, Position>; second: Record<string, Position> }> = {
     fraud: {
@@ -245,60 +255,70 @@ function OfficialComplaint({ draft, onFieldClick }: { draft: ComplaintDraft; onF
 
   return <div className="document-print-root official-document" aria-label={`${templateLabels[type]} 경찰청 간이 고소장 미리보기`}>
     <div className="official-form-note">경찰청 원본 서식 · 입력한 내용은 빈칸에 표시됩니다 · 주민등록번호 등 민감한 정보는 출력 후 직접 작성하세요</div>
-    <OfficialPage src={officialPages[type][0]} pageNumber={1} fields={makeFields(firstPositions)} marks={firstMarks} onFieldClick={onFieldClick} />
-    <OfficialPage src={officialPages[type][1]} pageNumber={2} fields={makeFields(second)} marks={secondMarks} onFieldClick={onFieldClick} />
+    <OfficialPage src={officialPages[type][0]} pageNumber={1} fields={makeFields(firstPositions)} marks={firstMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
+    <OfficialPage src={officialPages[type][1]} pageNumber={2} fields={makeFields(second)} marks={secondMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
     {type === 'assault' && (draft.incidentSummary || draft.damage || draft.evidence || draft.reason) && <article className="paper official-attachment">
       <h1>별지 · 사건 경위 및 추가 내용</h1>
       <p className="document-note">경찰청 폭행 간이 고소장 원본에는 자유 서술란이 없어, 아래 내용은 별지 초안으로 정리했습니다.</p>
       <div className="document-table">
-        <Row label="피해 일시" value={`${draft.incidentDate} ${draft.incidentTime}`.trim()} onClick={() => onFieldClick('incidentDate')} />
-        <Row label="피해 장소" value={draft.incidentPlace} onClick={() => onFieldClick('incidentPlace')} />
-        <Row label="사건 경위" value={draft.incidentSummary} onClick={() => onFieldClick('incidentSummary')} />
-        <Row label="피해·손해" value={draft.damage} onClick={() => onFieldClick('damage')} />
-        <Row label="증거자료" value={draft.evidence} onClick={() => onFieldClick('evidence')} />
-        <Row label="추가 고소 이유" value={draft.reason} onClick={() => onFieldClick('reason')} />
+        <Row label="피해 일시" value={`${draft.incidentDate} ${draft.incidentTime}`.trim()} animateKey={animatedFields?.incidentDate || animatedFields?.incidentTime} onClick={() => onFieldClick('incidentDate')} />
+        <Row label="피해 장소" value={draft.incidentPlace} animateKey={animatedFields?.incidentPlace} onClick={() => onFieldClick('incidentPlace')} />
+        <Row label="사건 경위" value={draft.incidentSummary} animateKey={animatedFields?.incidentSummary} onClick={() => onFieldClick('incidentSummary')} />
+        <Row label="피해·손해" value={draft.damage} animateKey={animatedFields?.damage} onClick={() => onFieldClick('damage')} />
+        <Row label="증거자료" value={draft.evidence} animateKey={animatedFields?.evidence} onClick={() => onFieldClick('evidence')} />
+        <Row label="추가 고소 이유" value={draft.reason} animateKey={animatedFields?.reason} onClick={() => onFieldClick('reason')} />
       </div>
-      <div className="document-signature"><span>고소인: <Value value={draft.complainantName} /> (인)</span></div>
+      <div className="document-signature"><span>고소인: <Value value={draft.complainantName} animateKey={animatedFields?.complainantName} /> (인)</span></div>
     </article>}
     <div className="official-source"><a href={officialFormSource} target="_blank" rel="noreferrer">경찰청 원본 서식 출처</a> · {checklistQuestions[type].length}개 체크리스트 항목도 원본에 포함되어 있습니다.</div>
   </div>
 }
 
-function Value({ value, placeholder = '미작성', multiline = false }: { value: string; placeholder?: string; multiline?: boolean }) {
-  return <span className={`${value ? 'document-value' : 'document-placeholder'} ${multiline ? 'multiline' : ''}`}>{value || placeholder}</span>
+function Value({ value, placeholder = '미작성', multiline = false, animateKey }: { value: string; placeholder?: string; multiline?: boolean; animateKey?: string }) {
+  return <span className={`${value ? 'document-value' : 'document-placeholder'} ${multiline ? 'multiline' : ''}`}>
+    {value ? <TypedDocumentText text={value} animateKey={animateKey} /> : placeholder}
+  </span>
 }
 
-function Row({ label, value, onClick, placeholder }: { label: string; value: string; onClick: () => void; placeholder?: string }) {
+function Row({ label, value, onClick, placeholder, animateKey }: { label: string; value: string; onClick: () => void; placeholder?: string; animateKey?: string }) {
   return <div className="document-row" onClick={onClick} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onClick()}>
-    <div className="document-row-label">{label}</div><div className="document-row-content"><Value value={value} placeholder={placeholder} /></div>
+    <div className="document-row-label">{label}</div><div className="document-row-content"><Value value={value} placeholder={placeholder} animateKey={animateKey} /></div>
   </div>
 }
 
-export default function ComplaintDocument({ draft, onFieldClick }: { draft: ComplaintDraft; onFieldClick: (field: string) => void }) {
-  if (draft.type !== 'general') return <OfficialComplaint draft={draft} onFieldClick={onFieldClick} />
+export default function ComplaintDocument({
+  draft,
+  animatedFields,
+  onFieldClick,
+}: {
+  draft: ComplaintDraft
+  animatedFields?: Record<string, string>
+  onFieldClick: (field: string) => void
+}) {
+  if (draft.type !== 'general') return <OfficialComplaint draft={draft} animatedFields={animatedFields} onFieldClick={onFieldClick} />
   return <div className="document-print-root"><article className="paper" aria-label="일반 고소장 초안 미리보기">
     <div className="paper-head"><h1>고소장 초안</h1><p className="paper-subtitle">일반 사건</p></div>
     <section className="document-section"><h2>1. 고소인</h2><div className="document-table">
-      <Row label="성명" value={draft.complainantName} onClick={() => onFieldClick('complainantName')} />
-      <Row label="주소" value={draft.complainantAddress} onClick={() => onFieldClick('complainantAddress')} />
-      <Row label="연락처" value={draft.complainantPhone} onClick={() => onFieldClick('complainantPhone')} />
+      <Row label="성명" value={draft.complainantName} animateKey={animatedFields?.complainantName} onClick={() => onFieldClick('complainantName')} />
+      <Row label="주소" value={draft.complainantAddress} animateKey={animatedFields?.complainantAddress} onClick={() => onFieldClick('complainantAddress')} />
+      <Row label="연락처" value={draft.complainantPhone} animateKey={animatedFields?.complainantPhone} onClick={() => onFieldClick('complainantPhone')} />
     </div></section>
     <section className="document-section"><h2>2. 피고소인</h2><div className="document-table">
-      <Row label="성명" value={draft.accusedName} onClick={() => onFieldClick('accusedName')} placeholder="성명 미상" />
-      <Row label="주소" value={draft.accusedAddress} onClick={() => onFieldClick('accusedAddress')} />
-      <Row label="연락처" value={draft.accusedPhone} onClick={() => onFieldClick('accusedPhone')} />
+      <Row label="성명" value={draft.accusedName} animateKey={animatedFields?.accusedName} onClick={() => onFieldClick('accusedName')} placeholder="성명 미상" />
+      <Row label="주소" value={draft.accusedAddress} animateKey={animatedFields?.accusedAddress} onClick={() => onFieldClick('accusedAddress')} />
+      <Row label="연락처" value={draft.accusedPhone} animateKey={animatedFields?.accusedPhone} onClick={() => onFieldClick('accusedPhone')} />
     </div></section>
     <section className="document-section"><h2>3. 사건 내용</h2><div className="document-table">
-      <Row label="피해 일시" value={`${draft.incidentDate} ${draft.incidentTime}`.trim()} onClick={() => onFieldClick('incidentDate')} />
-      <Row label="피해 장소" value={draft.incidentPlace} onClick={() => onFieldClick('incidentPlace')} />
-      <Row label="사건 경위" value={draft.incidentSummary} onClick={() => onFieldClick('incidentSummary')} />
-      <Row label="피해 내용·금액" value={draft.damage} onClick={() => onFieldClick('damage')} />
-      <Row label="처벌 희망" value={draft.request} onClick={() => onFieldClick('request')} placeholder="피고소인에 대한 처벌을 원합니다." />
-      <Row label="증거자료" value={draft.evidence} onClick={() => onFieldClick('evidence')} />
+      <Row label="피해 일시" value={`${draft.incidentDate} ${draft.incidentTime}`.trim()} animateKey={animatedFields?.incidentDate || animatedFields?.incidentTime} onClick={() => onFieldClick('incidentDate')} />
+      <Row label="피해 장소" value={draft.incidentPlace} animateKey={animatedFields?.incidentPlace} onClick={() => onFieldClick('incidentPlace')} />
+      <Row label="사건 경위" value={draft.incidentSummary} animateKey={animatedFields?.incidentSummary} onClick={() => onFieldClick('incidentSummary')} />
+      <Row label="피해 내용·금액" value={draft.damage} animateKey={animatedFields?.damage} onClick={() => onFieldClick('damage')} />
+      <Row label="처벌 희망" value={draft.request} animateKey={animatedFields?.request} onClick={() => onFieldClick('request')} placeholder="피고소인에 대한 처벌을 원합니다." />
+      <Row label="증거자료" value={draft.evidence} animateKey={animatedFields?.evidence} onClick={() => onFieldClick('evidence')} />
     </div></section>
-    <section className="document-section"><h2>4. 고소 이유</h2><div className="document-paragraph" onClick={() => onFieldClick('reason')} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onFieldClick('reason')}><Value value={draft.reason} placeholder="고소에 이르게 된 경위와 이유를 작성합니다." multiline /></div></section>
+    <section className="document-section"><h2>4. 고소 이유</h2><div className="document-paragraph" onClick={() => onFieldClick('reason')} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onFieldClick('reason')}><Value value={draft.reason} animateKey={animatedFields?.reason} placeholder="고소에 이르게 된 경위와 이유를 작성합니다." multiline /></div></section>
     <p className="document-declaration">위 내용은 고소인이 알고 있는 사실에 기초하여 작성한 초안입니다. 제출 전에 사실관계와 첨부자료를 직접 확인해 주세요.</p>
-    <div className="document-signature"><span>작성일: <Value value={new Date().toLocaleDateString('ko-KR')} /></span><span>고소인: <Value value={draft.complainantName} /> (인)</span></div>
+    <div className="document-signature"><span>작성일: <Value value={new Date().toLocaleDateString('ko-KR')} /></span><span>고소인: <Value value={draft.complainantName} animateKey={animatedFields?.complainantName} /> (인)</span></div>
     <div className="document-recipient">○○경찰서 귀중</div>
     <div className="document-source">서식 기준: <a href={policeFormsUrl} target="_blank" rel="noreferrer">경찰민원24 민원 서식</a> · 제출 전 관할 경찰서 서식을 확인해 주세요.</div>
   </article></div>

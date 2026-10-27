@@ -10,6 +10,7 @@ import ComplaintPanel from './components/ComplaintPanel'
 import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
+import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
 import { loadConversations, saveConversations } from './storage'
 import type { AiSettings, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent } from './types'
 import { blankDraft, createConversation, defaultModels } from './types'
@@ -42,21 +43,34 @@ export default function App() {
   const [startType, setStartType] = useState<ComplaintType>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.draft?.type || 'general')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
+  const [completedTypingId, setCompletedTypingId] = useState<string | null>(null)
+  const [animatedDraftFields, setAnimatedDraftFields] = useState<Record<string, string>>({})
   const scrollEnd = useRef<HTMLDivElement>(null)
+  const landingTextareaRef = useRef<HTMLTextAreaElement>(null)
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+
+  useTypedPlaceholder(landingTextareaRef, startType, Boolean(input))
+
+  function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
+    const scrollTarget = scrollEnd.current
+    if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
+      scrollTarget.scrollIntoView({ behavior })
+    }
+  }
 
   useEffect(() => {
     saveConversations(conversations)
   }, [conversations])
   useEffect(() => {
-    const scrollTarget = scrollEnd.current
-    if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
-      scrollTarget.scrollIntoView({ behavior: 'smooth' })
-    }
+    scrollToBottom('smooth')
   }, [activeId, active?.messages.length, busy])
   useEffect(() => {
+    setTypingMessageId(null)
+    setCompletedTypingId(null)
+    setAnimatedDraftFields({})
     if (!active) {
       setPreviewOpen(false)
       return
@@ -141,13 +155,31 @@ export default function App() {
       const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents)
       const assistantMessage = makeMessage('assistant', result.message)
       assistantMessage.followUpQuestions = result.followUpQuestions
+      const changedDraftFields: Record<string, string> = {}
+      for (const [key, value] of Object.entries(result.draftPatch)) {
+        if (key === 'type') continue
+        if (key === 'selections' && value && typeof value === 'object') {
+          const nextSelections = value as Record<string, string>
+          if (nextSelections.assaultBodyPart && nextSelections.assaultBodyPart !== target.draft.selections?.assaultBodyPart) {
+            changedDraftFields.assaultBodyPart = assistantMessage.id
+          }
+          continue
+        }
+        if (typeof value === 'string' && value.trim() && value !== target.draft[key as keyof ComplaintDraft]) {
+          changedDraftFields[key] = assistantMessage.id
+        }
+      }
+      setTypingMessageId(assistantMessage.id)
+      if (Object.keys(changedDraftFields).length > 0) {
+        setAnimatedDraftFields((current) => ({ ...current, ...changedDraftFields }))
+      }
       updateConversation(target.id, (conversation) => ({
         ...conversation,
         messages: [...conversation.messages, assistantMessage],
         draft: { ...conversation.draft, ...result.draftPatch },
         updatedAt: Date.now(),
       }))
-      if (activeId === target.id && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
+      if ((!active || activeId === target.id) && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
       if (result.searchQuery) {
         try {
           const found = await searchPrecedents(result.searchQuery)
@@ -161,9 +193,11 @@ export default function App() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.'
+      const errorMessage = makeMessage('assistant', `연결에 문제가 생겼어요. ${message}`)
+      setTypingMessageId(errorMessage.id)
       updateConversation(target.id, (conversation) => ({
         ...conversation,
-        messages: [...conversation.messages, makeMessage('assistant', `연결에 문제가 생겼어요. ${message}`)],
+        messages: [...conversation.messages, errorMessage],
         updatedAt: Date.now(),
       }))
     } finally {
@@ -273,7 +307,7 @@ export default function App() {
         {!active || active.messages.length === 0 ? <div className="welcome">
           <div className="welcome-intro">
             <span className="welcome-kicker">사건 정리</span>
-            <h1>무슨 일이 있었는지<br className="welcome-mobile-break" /> 들려주세요.</h1>
+            <WelcomeTypedHeading />
             <p className="welcome-description">법률 용어나 날짜를 정확히 몰라도 괜찮아요.<br className="welcome-desktop-break" /> 기억나는 대로 적어주시면 필요한 내용을 하나씩 여쭤볼게요.</p>
           </div>
           <div className="incident-type-picker" role="group" aria-label="사건 종류 선택">
@@ -285,7 +319,7 @@ export default function App() {
             </div>
           </div>
           <div className="landing-composer">
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
+            <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
             <div className="landing-composer-footer"><span>상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
@@ -300,14 +334,28 @@ export default function App() {
             <div className="message-content-stack">
               <div className="message-bubble">
                 {message.role === 'assistant' && <span className="message-author">고소미</span>}
-                <div className="message-body"><ReactMarkdown>{message.text}</ReactMarkdown></div>
+                {message.role === 'assistant' ? (
+                  <TypewriterMarkdown
+                    text={message.text}
+                    active={typingMessageId === message.id}
+                    onProgress={() => scrollToBottom('smooth')}
+                    onComplete={() => {
+                      setTypingMessageId((current) => (current === message.id ? null : current))
+                      setCompletedTypingId(message.id)
+                      window.setTimeout(() => scrollToBottom('smooth'), 40)
+                    }}
+                  />
+                ) : (
+                  <div className="message-body"><ReactMarkdown>{message.text}</ReactMarkdown></div>
+                )}
                 <span className="message-time">{new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}</span>
               </div>
-              {message.role === 'assistant' && Boolean(message.followUpQuestions?.length) && <FollowUpQuestions
+              {message.role === 'assistant' && Boolean(message.followUpQuestions?.length) && typingMessageId !== message.id && <FollowUpQuestions
                 questions={message.followUpQuestions || []}
                 answers={message.followUpAnswers || {}}
                 submitted={Boolean(message.followUpSubmitted)}
                 busy={busy}
+                animateQuestions={completedTypingId === message.id}
                 onAnswer={(questionId, answer) => updateFollowUpAnswer(message.id, questionId, answer)}
                 onSubmit={() => submitFollowUp(message)}
               />}
@@ -332,7 +380,7 @@ export default function App() {
       </div> : null}
     </main>
 
-    <ComplaintPanel draft={draft} open={previewOpen} onOpen={() => { ensureConversation(startType); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />
+    <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}

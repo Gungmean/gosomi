@@ -354,7 +354,17 @@ function throwProviderHttpError(provider, apiKey, response, data) {
   if (response.status === 401 || response.status === 403 || googleApiKeyInvalid) {
     throw new Error('API 키가 유효하지 않습니다. 제공자와 키를 확인해주세요.')
   }
-  if (response.status === 429) throw new Error('AI 제공자의 요청 한도에 도달했습니다. 잠시 후 다시 시도해주세요.')
+  if (response.status === 429) {
+    const isZeroQuota = /limit:\s*0\b/i.test(providerDetail)
+    const isDailyQuota = /per\s*day|PerDay|RPD/i.test(providerDetail)
+    if (isZeroQuota) {
+      throw new Error('현재 Google AI Studio API 키(무료 등급)에서 선택한 모델의 사용 한도가 0으로 제한되어 있습니다. Google AI Studio에서 새 프로젝트로 API 키를 발급받거나 결제 계정을 연결해주세요.')
+    }
+    if (isDailyQuota) {
+      throw new Error('오늘 사용 가능한 AI 무료 요청 한도(일일 할당량)를 모두 소진했습니다. Google AI Studio에서 다른 프로젝트로 새 API 키를 발급받거나 잠시 후 다시 시도해주세요.')
+    }
+    throw new Error('AI 제공자의 분당 요청 한도(429)에 도달했습니다. 약 10~30초 후 다시 시도하거나 Google AI Studio에서 다른 프로젝트의 API 키를 사용해주세요.')
+  }
   if (response.status === 503) {
     throw new Error(provider === 'gemini'
       ? 'Gemini 모델에 요청이 몰려 답변을 받지 못했습니다. 잠시 후 다시 시도해주세요.'
@@ -369,14 +379,10 @@ function throwProviderHttpError(provider, apiKey, response, data) {
   throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
 }
 
-async function callGemini(model, apiKey, conversation, prompt) {
+async function callGeminiSingleModel(model, apiKey, userPromptText, prompt) {
   const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
-  const userPromptText = conversation.length <= 1
-    ? (conversation[0]?.content || '안녕하세요.')
-    : `[이전 대화 기록]\n${conversation.slice(0, -1).map((item) => `${item.role === 'assistant' ? '고소미(이전 답변)' : '사용자'}: ${item.content}`).join('\n\n')}\n\n[현재 사용자 입력]\n${conversation[conversation.length - 1].content}`
-
   const supportsThinkingLevel = /^gemini-(?:2\.5|3|4)/.test(model)
-  const thinkingLevel = model.startsWith('gemini-3.5-flash-lite') ? 'minimal' : 'low'
+  const thinkingLevel = model.includes('lite') ? 'minimal' : 'low'
   const generateUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`
   const makeGenerateBody = (withThinking) => ({
     systemInstruction: { parts: [{ text: prompt }] },
@@ -384,7 +390,7 @@ async function callGemini(model, apiKey, conversation, prompt) {
     safetySettings: geminiSafetySettings,
     generationConfig: {
       responseMimeType: 'application/json',
-      maxOutputTokens: 8192,
+      maxOutputTokens: 2400,
       ...(withThinking ? { thinkingConfig: { thinkingLevel } } : {}),
     },
   })
@@ -393,7 +399,7 @@ async function callGemini(model, apiKey, conversation, prompt) {
     method: 'POST',
     headers,
     body: JSON.stringify(makeGenerateBody(supportsThinkingLevel)),
-  })
+  }, 2)
   let data = await response.json().catch(() => ({}))
 
   if (!response.ok && response.status === 400 && supportsThinkingLevel) {
@@ -403,23 +409,67 @@ async function callGemini(model, apiKey, conversation, prompt) {
         method: 'POST',
         headers,
         body: JSON.stringify(makeGenerateBody(false)),
-      })
+      }, 2)
       data = await response.json().catch(() => ({}))
     }
   }
 
-  if (response.ok) {
-    const text = extractGeminiGenerateContentText(data)
-    if (text) return text
-    const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason
-    if (blockReason === 'SAFETY' || blockReason === 'BLOCKLIST' || blockReason === 'PROHIBITED_CONTENT') {
-      throw new Error('입력 내용에 민감한 표현이 포함되어 AI 안전 정책에 의해 응답이 제한되었습니다. 표현을 완화해 다시 시도해주세요.')
+  return { response, data }
+}
+
+async function callGemini(model, apiKey, conversation, prompt) {
+  const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
+  const userPromptText = conversation.length <= 1
+    ? (conversation[0]?.content || '안녕하세요.')
+    : `[이전 대화 기록]\n${conversation.slice(0, -1).map((item) => `${item.role === 'assistant' ? '고소미(이전 답변)' : '사용자'}: ${item.content}`).join('\n\n')}\n\n[현재 사용자 입력]\n${conversation[conversation.length - 1].content}`
+
+  // Fallback across Gemini Flash models when a specific model hits 429 (quota/rate limit), 503 (overload), or 404
+  const candidateModels = [
+    model,
+    'gemini-3.8-flash',
+    'gemini-3.6-flash',
+    'gemini-3.5-flash-lite',
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-lite',
+    'gemini-2.0-flash',
+  ].filter((candidate, index, list) => Boolean(candidate) && list.indexOf(candidate) === index)
+
+  let lastResponse = null
+  let lastData = {}
+
+  for (let i = 0; i < candidateModels.length; i += 1) {
+    const candidate = candidateModels[i]
+    const { response, data } = await callGeminiSingleModel(candidate, apiKey, userPromptText, prompt)
+    lastResponse = response
+    lastData = data
+
+    if (response.ok) {
+      const text = extractGeminiGenerateContentText(data)
+      if (text) return text
+      const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason
+      if (blockReason === 'SAFETY' || blockReason === 'BLOCKLIST' || blockReason === 'PROHIBITED_CONTENT') {
+        throw new Error('입력 내용에 민감한 표현이 포함되어 AI 안전 정책에 의해 응답이 제한되었습니다. 표현을 완화해 다시 시도해주세요.')
+      }
     }
+
+    const googleKeyInvalid = (Array.isArray(data) ? data[0]?.error?.details : data?.error?.details)
+      ?.some((detail) => detail?.reason === 'API_KEY_INVALID')
+    if (googleKeyInvalid || response.status === 401 || response.status === 403) {
+      throwProviderHttpError('gemini', apiKey, response, data)
+    }
+
+    // If rate-limited (429), overloaded (503), or unavailable (404), try the next Gemini model in the chain
+    if ([429, 503, 404].includes(response.status) && i < candidateModels.length - 1) {
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 300))
+      continue
+    }
+    break
   }
 
-  const googleKeyInvalid = (Array.isArray(data) ? data[0]?.error?.details : data?.error?.details)
-    ?.some((detail) => detail?.reason === 'API_KEY_INVALID')
-  if (!googleKeyInvalid && response.status !== 401 && response.status !== 403 && response.status !== 429) {
+  // If generateContent failed with non-auth/non-quota error, try Interactions API as a backup
+  if (lastResponse && ![401, 403, 429].includes(lastResponse.status)) {
+    const supportsThinkingLevel = /^gemini-(?:2\.5|3|4)/.test(model)
+    const thinkingLevel = model.includes('lite') ? 'minimal' : 'low'
     const interactionsUrl = 'https://generativelanguage.googleapis.com/v1beta/interactions'
     const interactionsBody = {
       model,
@@ -427,7 +477,7 @@ async function callGemini(model, apiKey, conversation, prompt) {
       system_instruction: prompt,
       input: userPromptText,
       generation_config: {
-        max_output_tokens: 8192,
+        max_output_tokens: 2400,
         ...(supportsThinkingLevel ? { thinking_level: thinkingLevel } : {}),
       },
       response_format: [
@@ -438,19 +488,26 @@ async function callGemini(model, apiKey, conversation, prompt) {
       method: 'POST',
       headers,
       body: JSON.stringify(interactionsBody),
-    })
+    }, 1)
     const intData = await intResponse.json().catch(() => ({}))
     if (intResponse.ok) {
       const intText = extractGeminiInteractionsText(intData)
       if (intText) return intText
-    } else if (!response.ok) {
-      response = intResponse
-      data = intData
     }
   }
 
-  if (!response.ok) {
-    throwProviderHttpError('gemini', apiKey, response, data)
+  // If all candidate models returned 429, wait briefly and retry once with gemini-2.5-flash
+  if (lastResponse && lastResponse.status === 429) {
+    await new Promise((resolveDelay) => setTimeout(resolveDelay, 1200))
+    const retry = await callGeminiSingleModel('gemini-2.5-flash', apiKey, userPromptText, prompt)
+    if (retry.response.ok) {
+      const retryText = extractGeminiGenerateContentText(retry.data)
+      if (retryText) return retryText
+    }
+  }
+
+  if (lastResponse && !lastResponse.ok) {
+    throwProviderHttpError('gemini', apiKey, lastResponse, lastData)
   }
   throw new Error('Gemini 모델로부터 유효한 응답 텍스트를 받지 못했습니다. 잠시 후 다시 시도해주세요.')
 }
@@ -524,7 +581,7 @@ app.post('/api/chat', async (request, response) => {
     const message = timedOut ? 'AI 응답이 제한 시간 안에 도착하지 않았습니다. 잠시 후 다시 시도해주세요.'
       : error instanceof Error ? error.message : 'AI 응답을 받지 못했습니다.'
     const status = message.startsWith('API 키가 유효하지 않습니다.') ? 401
-      : message.startsWith('AI 제공자의 요청 한도') ? 429
+      : message.includes('한도') ? 429
         : message.startsWith('AI 제공자가 요청을 거부했습니다.') ? 400
           : message.startsWith('선택한 AI 모델을 찾을 수 없습니다.') ? 400
           : timedOut ? 504
