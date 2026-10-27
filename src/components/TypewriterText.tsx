@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { TypeAnimation } from 'react-type-animation'
 import Typed from 'typed.js'
 import type { ComplaintType } from '../types'
 
@@ -25,6 +24,10 @@ const PLACEHOLDER_EXAMPLES: Record<ComplaintType, string[]> = {
     '예: 온라인에서 제 신상정보와 함께 사실이 아닌 글을 올려 큰 피해를 입었어요.',
     '예: 언제, 어디서, 누구에게 어떤 피해를 입었는지 기억나는 대로 편하게 적어주세요.',
   ],
+}
+
+function escapeForTyped(value: string): string {
+  return value.replace(/`/g, "'").replace(/\^(\d)/g, ' ^$1')
 }
 
 /**
@@ -64,9 +67,57 @@ function stabilizeMarkdownSlice(fullText: string, charCount: number): string {
 }
 
 /**
+ * Reusable plain-text typewriter span powered by Typed.js.
+ */
+export function TypedSpan({
+  text,
+  typeSpeed = 24,
+  startDelay = 0,
+  showCursor = false,
+  cursorChar = '▍',
+  onComplete,
+}: {
+  text: string
+  typeSpeed?: number
+  startDelay?: number
+  showCursor?: boolean
+  cursorChar?: string
+  onComplete?: () => void
+}) {
+  const elRef = useRef<HTMLSpanElement>(null)
+  const onCompleteRef = useRef(onComplete)
+  onCompleteRef.current = onComplete
+
+  useEffect(() => {
+    const element = elRef.current
+    if (!element) return
+    element.textContent = ''
+
+    const typed = new Typed(element, {
+      strings: [escapeForTyped(text)],
+      typeSpeed,
+      startDelay,
+      showCursor,
+      cursorChar,
+      contentType: 'null',
+      onComplete: (self) => {
+        if (!showCursor) self.cursor?.remove()
+        onCompleteRef.current?.()
+      },
+    })
+
+    return () => {
+      typed.destroy()
+    }
+  }, [text, typeSpeed, startDelay, showCursor, cursorChar])
+
+  return <span ref={elRef} />
+}
+
+/**
  * Progressive Markdown typewriter for AI chat messages.
- * Uses a direct requestAnimationFrame loop so OS reduced-motion settings on Windows PC
- * never skip or disable the typing animation.
+ * Driven by Typed.js character progression + ReactMarkdown so Markdown formatting
+ * and typing animation work reliably on both PC and mobile.
  */
 export function TypewriterMarkdown({
   text,
@@ -97,36 +148,31 @@ export function TypewriterMarkdown({
     setCharCount(1)
     setIsTyping(true)
 
-    const durationMs = Math.min(2500, Math.max(650, text.length * 16))
-    const startTime = performance.now()
-    let rafId = 0
+    const stepMs = Math.min(28, Math.max(12, Math.round(2200 / Math.max(text.length, 1))))
+    let current = 1
     let lastScrollTick = 0
 
-    const step = (now: number) => {
-      const elapsed = now - startTime
-      const progress = Math.min(1, elapsed / durationMs)
-      const nextCount = Math.min(text.length, Math.max(1, Math.round(progress * text.length)))
-      setCharCount(nextCount)
+    const timer = window.setInterval(() => {
+      const increment = text.length > 180 ? 2 : 1
+      current = Math.min(text.length, current + increment)
+      setCharCount(current)
 
+      const now = performance.now()
       if (now - lastScrollTick > 80) {
         lastScrollTick = now
         onProgressRef.current?.()
       }
 
-      if (progress < 1) {
-        rafId = window.requestAnimationFrame(step)
-      } else {
-        setCharCount(text.length)
+      if (current >= text.length) {
+        window.clearInterval(timer)
         setIsTyping(false)
         onProgressRef.current?.()
         onCompleteRef.current?.()
       }
-    }
-
-    rafId = window.requestAnimationFrame(step)
+    }, stepMs)
 
     return () => {
-      window.cancelAnimationFrame(rafId)
+      window.clearInterval(timer)
     }
   }, [active, text])
 
@@ -152,7 +198,7 @@ export function TypewriterMarkdown({
 }
 
 /**
- * Typewriter component for live Complaint Document fields using react-type-animation.
+ * Typewriter component for live Complaint Document fields using Typed.js.
  */
 export function TypedDocumentText({
   text,
@@ -174,22 +220,19 @@ export function TypedDocumentText({
 
   return (
     <span className="document-typing-active">
-      <TypeAnimation
+      <TypedSpan
         key={`${animateKey}-${text}`}
-        sequence={[
-          text,
-          () => setCompletedKey(animateKey || null),
-        ]}
-        wrapper="span"
-        cursor={false}
-        speed={{ type: 'keyStrokeDelayInMs', value: Math.min(26, Math.max(10, Math.round(850 / Math.max(text.length, 1)))) }}
+        text={text}
+        typeSpeed={Math.min(26, Math.max(10, Math.round(800 / Math.max(text.length, 1))))}
+        showCursor={false}
+        onComplete={() => setCompletedKey(animateKey || null)}
       />
     </span>
   )
 }
 
 /**
- * Welcome Hero Title with typing animation via react-type-animation.
+ * Welcome Hero Title with typing animation via Typed.js.
  */
 export function WelcomeTypedHeading() {
   const [done, setDone] = useState(false)
@@ -205,14 +248,12 @@ export function WelcomeTypedHeading() {
 
   return (
     <h1 aria-label="무슨 일이 있었는지 들려주세요.">
-      <TypeAnimation
-        sequence={[
-          '무슨 일이 있었는지 들려주세요.',
-          () => setDone(true),
-        ]}
-        wrapper="span"
-        cursor={true}
-        speed={{ type: 'keyStrokeDelayInMs', value: 40 }}
+      <TypedSpan
+        text="무슨 일이 있었는지 들려주세요."
+        typeSpeed={42}
+        showCursor={true}
+        cursorChar="▍"
+        onComplete={() => setDone(true)}
       />
     </h1>
   )
@@ -225,8 +266,10 @@ export function useTypedPlaceholder(
   textareaRef: React.RefObject<HTMLTextAreaElement | null>,
   complaintType: ComplaintType,
   hasInput: boolean,
+  isWelcome: boolean,
 ) {
   useEffect(() => {
+    if (!isWelcome) return
     const element = textareaRef.current
     if (!element) return
 
@@ -236,7 +279,6 @@ export function useTypedPlaceholder(
       return
     }
 
-    // Clear initial placeholder before initializing Typed.js so it types forward from index 0
     element.setAttribute('placeholder', '')
 
     const typed = new Typed(element, {
@@ -255,5 +297,5 @@ export function useTypedPlaceholder(
       typed.destroy()
       element.setAttribute('placeholder', examples[0])
     }
-  }, [textareaRef, complaintType, hasInput])
+  }, [textareaRef, complaintType, hasInput, isWelcome])
 }

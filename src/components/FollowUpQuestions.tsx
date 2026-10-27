@@ -1,7 +1,7 @@
 import { ArrowUpRight } from 'lucide-react'
 import { motion } from 'motion/react'
-import { TypeAnimation } from 'react-type-animation'
 import type { FollowUpAnswer, FollowUpQuestion } from '../types'
+import { TypedSpan } from './TypewriterText'
 
 export default function FollowUpQuestions({
   questions,
@@ -45,12 +45,12 @@ export default function FollowUpQuestions({
             <span>{index + 1}</span>
             <strong>
               {shouldType ? (
-                <TypeAnimation
+                <TypedSpan
                   key={question.id}
-                  sequence={index > 0 ? [index * 160, question.text] : [question.text]}
-                  wrapper="span"
-                  cursor={false}
-                  speed={{ type: 'keyStrokeDelayInMs', value: 18 }}
+                  text={question.text}
+                  typeSpeed={18}
+                  startDelay={index * 160}
+                  showCursor={false}
                 />
               ) : (
                 question.text

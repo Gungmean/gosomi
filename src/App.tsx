@@ -44,7 +44,11 @@ export default function App() {
   const [startType, setStartType] = useState<ComplaintType>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.draft?.type || 'general')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState('')
-  const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(() => {
+    const initialConv = loadConversations().find((conversation) => conversation.messages.length > 0)
+    const lastAssistant = initialConv ? [...initialConv.messages].reverse().find((m) => m.role === 'assistant') : undefined
+    return lastAssistant?.id || null
+  })
   const [completedTypingId, setCompletedTypingId] = useState<string | null>(null)
   const [animatedDraftFields, setAnimatedDraftFields] = useState<Record<string, string>>({})
   const chatScrollRef = useRef<HTMLDivElement>(null)
@@ -53,8 +57,9 @@ export default function App() {
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+  const isWelcome = !active || active.messages.length === 0
 
-  useTypedPlaceholder(landingTextareaRef, startType, Boolean(input))
+  useTypedPlaceholder(landingTextareaRef, startType, Boolean(input), isWelcome)
 
   function scrollToBottom(duringTyping = false) {
     const container = chatScrollRef.current
@@ -82,7 +87,8 @@ export default function App() {
     scrollToBottom(false)
   }, [activeId, active?.messages.length, busy])
   useEffect(() => {
-    setTypingMessageId(null)
+    const lastAssistant = active ? [...active.messages].reverse().find((m) => m.role === 'assistant') : undefined
+    setTypingMessageId(lastAssistant?.id || null)
     setCompletedTypingId(null)
     setAnimatedDraftFields({})
     if (!active) {
@@ -324,7 +330,7 @@ export default function App() {
         {!active || active.messages.length === 0 ? <div className="welcome">
           <div className="welcome-intro">
             <span className="welcome-kicker">사건 정리</span>
-            <WelcomeTypedHeading />
+            <WelcomeTypedHeading key={activeId || 'welcome'} />
             <p className="welcome-description">법률 용어나 날짜를 정확히 몰라도 괜찮아요.<br className="welcome-desktop-break" /> 기억나는 대로 적어주시면 필요한 내용을 하나씩 여쭤볼게요.</p>
           </div>
           <div className="incident-type-picker" role="group" aria-label="사건 종류 선택">
