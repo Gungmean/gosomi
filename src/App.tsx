@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { MotionConfig } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import {
   ArrowRight, BookOpen, FileText, History,
@@ -10,7 +11,7 @@ import ComplaintPanel from './components/ComplaintPanel'
 import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
-import { TypewriterMarkdown } from './components/TypewriterText'
+import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
 import { loadConversations, saveConversations } from './storage'
 import type { AiSettings, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent } from './types'
 import { blankDraft, createConversation, defaultModels } from './types'
@@ -48,9 +49,12 @@ export default function App() {
   const [animatedDraftFields, setAnimatedDraftFields] = useState<Record<string, string>>({})
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const scrollEnd = useRef<HTMLDivElement>(null)
+  const landingTextareaRef = useRef<HTMLTextAreaElement>(null)
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
+
+  useTypedPlaceholder(landingTextareaRef, startType, Boolean(input))
 
   function scrollToBottom(duringTyping = false) {
     const container = chatScrollRef.current
@@ -270,7 +274,7 @@ export default function App() {
     newConversation(type)
   }
 
-  return <div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
+  return <MotionConfig reducedMotion="never"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
         <button className="brand" onClick={() => { setActiveId(null); setSidebarOpen(false) }} aria-label="고소미 홈으로">
@@ -320,7 +324,7 @@ export default function App() {
         {!active || active.messages.length === 0 ? <div className="welcome">
           <div className="welcome-intro">
             <span className="welcome-kicker">사건 정리</span>
-            <h1>무슨 일이 있었는지<br className="welcome-mobile-break" /> 들려주세요.</h1>
+            <WelcomeTypedHeading />
             <p className="welcome-description">법률 용어나 날짜를 정확히 몰라도 괜찮아요.<br className="welcome-desktop-break" /> 기억나는 대로 적어주시면 필요한 내용을 하나씩 여쭤볼게요.</p>
           </div>
           <div className="incident-type-picker" role="group" aria-label="사건 종류 선택">
@@ -332,7 +336,7 @@ export default function App() {
             </div>
           </div>
           <div className="landing-composer">
-            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
+            <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
             <div className="landing-composer-footer"><span>상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
@@ -397,5 +401,5 @@ export default function App() {
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}
-  </div>
+  </div></MotionConfig>
 }
