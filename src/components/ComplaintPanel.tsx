@@ -47,7 +47,6 @@ export default function ComplaintPanel({
 }) {
   const [tab, setTab] = useState('preview')
   const startX = useRef<number | null>(null)
-  const isNarrowScreen = typeof window !== 'undefined' && window.matchMedia('(max-width: 750px)').matches
 
   useEffect(() => {
     if (!open) return
@@ -86,10 +85,29 @@ export default function ComplaintPanel({
         <FileText size={18} />
         <span>고소장</span>
       </button>}
-      <AnimatePresence>
-        {open && <>
-          <motion.button className="panel-scrim" aria-label="미리보기 닫기" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />
-          <motion.aside className="preview-panel" aria-label="고소장 작성 패널" initial={isNarrowScreen ? false : { x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'spring', stiffness: 360, damping: 38 }}>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.button
+            key="panel-scrim"
+            className="panel-scrim"
+            aria-label="미리보기 닫기"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: 'easeOut' }}
+            onClick={onClose}
+          />
+        )}
+        {open && (
+          <motion.aside
+            key="preview-panel"
+            className="preview-panel"
+            aria-label="고소장 작성 패널"
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'tween', duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+          >
             <div className="panel-header">
               <div className="panel-header-icon"><FileText size={20} /></div>
               <div className="panel-header-copy"><strong>고소장 작성</strong><span>입력한 내용이 문서에 바로 반영됩니다</span></div>
@@ -132,7 +150,7 @@ export default function ComplaintPanel({
               <button className="footer-primary" onClick={onClose}>작성 계속하기 <ChevronLeft size={17} className="rotate-180" /></button>
             </div>
           </motion.aside>
-        </>}
+        )}
       </AnimatePresence>
     </>
   )

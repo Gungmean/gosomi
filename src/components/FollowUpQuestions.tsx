@@ -1,6 +1,5 @@
 import { ArrowUpRight } from 'lucide-react'
 import { motion } from 'motion/react'
-import { TypeAnimation } from 'react-type-animation'
 import type { FollowUpAnswer, FollowUpQuestion } from '../types'
 
 export default function FollowUpQuestions({
@@ -23,14 +22,14 @@ export default function FollowUpQuestions({
   const complete = questions.every((question) => question.answerType === 'text'
     ? Boolean(answers[question.id]?.text?.trim())
     : Boolean(answers[question.id]?.choice))
-  const shouldType = animateQuestions && !submitted && typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const shouldAnimate = animateQuestions && !submitted && typeof window !== 'undefined' && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
 
   return <motion.section
     className={`followup-card${submitted ? ' submitted' : ''}`}
     aria-label="추가 확인 질문"
-    initial={shouldType ? { opacity: 0, y: 8 } : false}
+    initial={shouldAnimate ? { opacity: 0, y: 6 } : false}
     animate={{ opacity: 1, y: 0 }}
-    transition={{ duration: 0.24, ease: 'easeOut' }}
+    transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
   >
     <div className="followup-heading">
       <strong>확인 질문</strong>
@@ -40,22 +39,16 @@ export default function FollowUpQuestions({
       {questions.map((question, index) => {
         const answer = answers[question.id] || {}
         const needsDetail = question.answerType === 'text' || (answer.choice === 'yes' && Boolean(question.detailPrompt))
-        return <div className="followup-question" key={question.id}>
+        return <motion.div
+          className="followup-question"
+          key={question.id}
+          initial={shouldAnimate ? { opacity: 0, y: 4 } : false}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, delay: shouldAnimate ? index * 0.06 : 0, ease: 'easeOut' }}
+        >
           <div className="followup-question-title">
             <span>{index + 1}</span>
-            <strong>
-              {shouldType ? (
-                <TypeAnimation
-                  key={question.id}
-                  sequence={index > 0 ? [index * 180, question.text] : [question.text]}
-                  wrapper="span"
-                  cursor={false}
-                  speed={{ type: 'keyStrokeDelayInMs', value: 18 }}
-                />
-              ) : (
-                question.text
-              )}
-            </strong>
+            <strong>{question.text}</strong>
           </div>
           {question.answerType === 'yes_no' && <div className="followup-options" role="group" aria-label={question.text}>
             {([
@@ -75,7 +68,7 @@ export default function FollowUpQuestions({
               ? <textarea value={answer.text || ''} onChange={(event) => onAnswer(question.id, { ...answer, text: event.target.value })} placeholder={question.placeholder || '답변을 입력해 주세요'} rows={2} disabled={submitted || busy} />
               : <input value={answer.text || ''} onChange={(event) => onAnswer(question.id, { ...answer, text: event.target.value })} placeholder={question.placeholder || '추가 내용을 입력해 주세요 (선택)'} disabled={submitted || busy} />}
           </label>}
-        </div>
+        </motion.div>
       })}
     </div>
     {!submitted && <button type="button" className="followup-submit" disabled={!complete || busy} onClick={onSubmit}>

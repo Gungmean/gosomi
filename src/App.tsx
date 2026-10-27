@@ -10,7 +10,7 @@ import ComplaintPanel from './components/ComplaintPanel'
 import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
-import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
+import { TypewriterMarkdown } from './components/TypewriterText'
 import { loadConversations, saveConversations } from './storage'
 import type { AiSettings, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent } from './types'
 import { blankDraft, createConversation, defaultModels } from './types'
@@ -46,18 +46,28 @@ export default function App() {
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
   const [completedTypingId, setCompletedTypingId] = useState<string | null>(null)
   const [animatedDraftFields, setAnimatedDraftFields] = useState<Record<string, string>>({})
+  const chatScrollRef = useRef<HTMLDivElement>(null)
   const scrollEnd = useRef<HTMLDivElement>(null)
-  const landingTextareaRef = useRef<HTMLTextAreaElement>(null)
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
 
-  useTypedPlaceholder(landingTextareaRef, startType, Boolean(input))
-
-  function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
+  function scrollToBottom(duringTyping = false) {
+    const container = chatScrollRef.current
+    if (container) {
+      if (duringTyping) {
+        const distanceFromBottom = container.scrollHeight - container.scrollTop - container.clientHeight
+        if (distanceFromBottom < 200) {
+          container.scrollTop = container.scrollHeight
+        }
+        return
+      }
+      container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+      return
+    }
     const scrollTarget = scrollEnd.current
     if (scrollTarget && typeof scrollTarget.scrollIntoView === 'function') {
-      scrollTarget.scrollIntoView({ behavior })
+      scrollTarget.scrollIntoView({ behavior: duringTyping ? 'auto' : 'smooth' })
     }
   }
 
@@ -65,7 +75,7 @@ export default function App() {
     saveConversations(conversations)
   }, [conversations])
   useEffect(() => {
-    scrollToBottom('smooth')
+    scrollToBottom(false)
   }, [activeId, active?.messages.length, busy])
   useEffect(() => {
     setTypingMessageId(null)
@@ -75,8 +85,11 @@ export default function App() {
       setPreviewOpen(false)
       return
     }
-    const hasDraftContent = active.draft.type !== 'general' || Object.entries(active.draft).some(([key, value]) =>
-      key !== 'type' && key !== 'selections' && typeof value === 'string' && Boolean(value.trim()))
+    const hasDraftContent = active.messages.length > 0 && (
+      active.draft.type !== 'general' ||
+      Object.entries(active.draft).some(([key, value]) =>
+        key !== 'type' && key !== 'selections' && typeof value === 'string' && Boolean(value.trim()))
+    )
     setPreviewOpen(hasDraftContent)
   }, [activeId])
   useEffect(() => {
@@ -303,11 +316,11 @@ export default function App() {
         </div>
       </header>
 
-      <div className="chat-scroll">
+      <div className="chat-scroll" ref={chatScrollRef}>
         {!active || active.messages.length === 0 ? <div className="welcome">
           <div className="welcome-intro">
             <span className="welcome-kicker">사건 정리</span>
-            <WelcomeTypedHeading />
+            <h1>무슨 일이 있었는지<br className="welcome-mobile-break" /> 들려주세요.</h1>
             <p className="welcome-description">법률 용어나 날짜를 정확히 몰라도 괜찮아요.<br className="welcome-desktop-break" /> 기억나는 대로 적어주시면 필요한 내용을 하나씩 여쭤볼게요.</p>
           </div>
           <div className="incident-type-picker" role="group" aria-label="사건 종류 선택">
@@ -319,7 +332,7 @@ export default function App() {
             </div>
           </div>
           <div className="landing-composer">
-            <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
+            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요." rows={3} aria-label="사건 내용 입력" />
             <div className="landing-composer-footer"><span>상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
@@ -338,11 +351,11 @@ export default function App() {
                   <TypewriterMarkdown
                     text={message.text}
                     active={typingMessageId === message.id}
-                    onProgress={() => scrollToBottom('smooth')}
+                    onProgress={() => scrollToBottom(true)}
                     onComplete={() => {
                       setTypingMessageId((current) => (current === message.id ? null : current))
                       setCompletedTypingId(message.id)
-                      window.setTimeout(() => scrollToBottom('smooth'), 40)
+                      window.setTimeout(() => scrollToBottom(false), 40)
                     }}
                   />
                 ) : (
