@@ -138,6 +138,11 @@ const draftFields = [
   'incidentDate', 'incidentTime', 'incidentPlace', 'incidentSummary', 'damage', 'reason',
   'evidence', 'request', 'relatedCase',
 ]
+const draftSelectionFields = new Set([
+  'fraudMethod', 'civilCase', 'fraudFamily', 'fraudLivedTogether', 'fraudKnewLong', 'fraudContactable', 'fraudPreviousTrade', 'fraudPromise', 'previousComplaint', 'withdrawnComplaint',
+  'defamationChannel', 'defamationKnownHow', 'defamationTruth', 'defamationPublicity', 'defamationFamily', 'defamationKnown', 'defamationIdentifiable', 'defamationReputation', 'defamationPublicPlace', 'defamationOthersKnew', 'defamationOneToOne',
+  'assaultBodyPart', 'assaultType', 'assaultRelation', 'assaultCondition', 'assaultMethod', 'assaultHospital', 'assaultMutual', 'assaultSudden', 'assaultArgument', 'assaultWitness', 'assaultCctv', 'assaultWithdraw',
+])
 
 const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceDate', 'allegation', 'claims', 'confirmedFacts', 'disputedPoints', 'evidenceToPreserve', 'questionsToConfirm', 'nextSteps']
 
@@ -168,14 +173,14 @@ function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft
 사건 답변은 가능한 경우 **핵심 요약 → 확인된 사실과 추가 확인 사항 → 관련 법적 쟁점과 근거 → 지금 할 일** 순서로 작성하세요. 해당 정보가 없거나 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 표시하세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
 아래 verifiedCases에 있는 판례만 사건번호와 링크를 근거로 언급할 수 있습니다. 관련성이 불분명하면 언급하지 마세요.
-${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : '사용자가 명시한 정보로만 draftPatch를 채우고, 기존 값을 임의로 지우지 마세요.'}
+${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : `고소장 작성 모드에서는 사용자의 사건 설명과 후속 답변에서 확인된 사실을 매 응답마다 draftPatch의 알맞은 필드에 반영하세요. 채팅 답변(message)에만 사실을 적고 draftPatch를 비워 두지 마세요. 일시·장소·행위·피해·증거·상대 식별정보를 각각 대응하는 필드에 넣고, 사건 유형이 명확하면 type도 fraud/defamation/assault/general 중 선택하세요. 선택형 질문에 답할 근거가 분명한 경우 draftPatch.selections의 해당 키도 채우세요. 사용자가 말하지 않은 정보는 만들지 말고, 불확실한 값은 비워 두고 질문하세요. 기존 값을 임의로 지우지 마세요.`}
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
 ${modeGuidance}
 필요한 확인 질문은 최대 4개까지 questions에 구조화하세요. 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
 {"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{},"responsePatch":{},"searchQuery":"","questions":[{"id":"q1","text":"치료를 받으셨나요?","answerType":"yes_no","detailPrompt":"어느 병원에서 어떤 치료를 받으셨나요?"}]}
-허용된 draftPatch 키: ${draftFields.join(', ')}
+허용된 draftPatch 키: ${draftFields.join(', ')}, selections (${[...draftSelectionFields].join(', ')})
 허용된 responsePatch 키: ${responseFields.join(', ')}
 ${caseMode === 'respondent' ? '' : `현재 고소장 상태: ${JSON.stringify(compactDraft)}`}
 ${caseMode === 'respondent' ? `사용자가 선택한 사건 분류: ${String(draft?.type || 'general')}` : ''}
@@ -219,6 +224,9 @@ function parseAiOutput(output) {
       }
     }
   }
+  const inputSelections = inputPatch.selections && typeof inputPatch.selections === 'object' && !Array.isArray(inputPatch.selections) ? inputPatch.selections : {}
+  const selections = Object.fromEntries(Object.entries(inputSelections).filter(([field, value]) => draftSelectionFields.has(field) && typeof value === 'string' && value.trim()).map(([field, value]) => [field, value.slice(0, 500)]))
+  if (Object.keys(selections).length) draftPatch.selections = selections
   const inputResponsePatch = parsed?.responsePatch && typeof parsed.responsePatch === 'object' ? parsed.responsePatch : {}
   for (const field of responseFields) {
     const value = inputResponsePatch[field]
