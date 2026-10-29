@@ -1,4 +1,4 @@
-import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, FollowUpQuestion, Precedent } from './types'
+import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, FollowUpQuestion, Precedent, ResponseDraft } from './types'
 
 async function readJson(response: Response) {
   const body = await response.json().catch(() => ({}))
@@ -14,11 +14,12 @@ export async function askAi(
   draft: ComplaintDraft,
   precedents: Precedent[],
   caseMode: CaseMode = 'complainant',
-): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string }> {
+  responseDraft?: ResponseDraft,
+): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; responsePatch?: Partial<ResponseDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string }> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ settings, messages, draft, precedents, caseMode }),
+    body: JSON.stringify({ settings, messages, draft, precedents, caseMode, responseDraft }),
   })
   return readJson(response)
 }

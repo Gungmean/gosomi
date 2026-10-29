@@ -8,13 +8,14 @@ import {
 } from 'lucide-react'
 import { askAi, searchPrecedents } from './api'
 import ComplaintPanel from './components/ComplaintPanel'
+import ResponsePanel from './components/ResponsePanel'
 import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
 import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
 import { isValidApiKeyFormat, loadConversations, loadSettings, saveConversations, saveSettings } from './storage'
-import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent } from './types'
-import { blankDraft, createConversation } from './types'
+import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent, ResponseDraft } from './types'
+import { blankDraft, blankResponseDraft, createConversation } from './types'
 
 function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
   return { id: crypto.randomUUID(), role, text, createdAt: Date.now() }
@@ -57,6 +58,8 @@ export default function App() {
   const landingTextareaRef = useRef<HTMLTextAreaElement>(null)
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
+  const responseDraft = active?.responseDraft || blankResponseDraft()
+  const currentMode = active?.caseMode || startMode
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
   const isWelcome = !active || active.messages.length === 0
 
@@ -99,11 +102,11 @@ export default function App() {
       setPreviewOpen(false)
       return
     }
-    const hasDraftContent = active.caseMode !== 'respondent' && active.messages.length > 0 && (
-      active.draft.type !== 'general' ||
+    const hasDraftContent = active.caseMode === 'respondent'
+      ? Object.values(active.responseDraft || {}).some((value) => typeof value === 'string' && Boolean(value.trim()))
+      : active.messages.length > 0 && (active.draft.type !== 'general' ||
       Object.entries(active.draft).some(([key, value]) =>
-        key !== 'type' && key !== 'selections' && typeof value === 'string' && Boolean(value.trim()))
-    )
+        key !== 'type' && key !== 'selections' && typeof value === 'string' && Boolean(value.trim())))
     setPreviewOpen(hasDraftContent)
   }, [activeId])
   useEffect(() => {
@@ -129,6 +132,7 @@ export default function App() {
     setConversations((current) => [next, ...current])
     setActiveId(next.id)
     setStartType(type)
+    setStartMode(mode)
     setInput(prompt)
     setSidebarOpen(false)
     return next
@@ -141,6 +145,11 @@ export default function App() {
       draft: { ...conversation.draft, ...patch },
       updatedAt: Date.now(),
     }))
+  }
+
+  function updateResponseDraft(patch: Partial<ResponseDraft>) {
+    const target = ensureConversation(startType, 'respondent')
+    updateConversation(target.id, (conversation) => ({ ...conversation, responseDraft: { ...blankResponseDraft(), ...conversation.responseDraft, ...patch }, updatedAt: Date.now() }))
   }
 
   function updatePrecedents(results: Precedent[]) {
@@ -166,7 +175,7 @@ export default function App() {
       setNotice('API 키 입력란에 한글이나 잘못된 문자가 들어갔습니다. 영문·숫자로 된 API 키(예: AIza...)를 다시 입력해주세요.')
       return
     }
-    const target = active || createConversation(startType)
+    const target = active || createConversation(startType, startMode)
     if (!active) {
       setConversations((current) => [target, ...current])
       setActiveId(target.id)
@@ -186,7 +195,7 @@ export default function App() {
     setInput('')
     setBusy(true)
     try {
-      const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents, target.caseMode || 'complainant')
+      const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft)
       const responseText = result.modelUsed
         ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
         : result.message
@@ -214,9 +223,11 @@ export default function App() {
         ...conversation,
         messages: [...conversation.messages, assistantMessage],
         draft: { ...conversation.draft, ...result.draftPatch },
+        responseDraft: { ...blankResponseDraft(), ...conversation.responseDraft, ...result.responsePatch },
         updatedAt: Date.now(),
       }))
       if ((!active || activeId === target.id) && target.caseMode !== 'respondent' && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
+      if ((!active || activeId === target.id) && target.caseMode === 'respondent' && Object.keys(result.responsePatch || {}).length > 0) setPreviewOpen(true)
       if (result.searchQuery) {
         try {
           const found = await searchPrecedents(result.searchQuery)
@@ -271,7 +282,8 @@ export default function App() {
   }
 
   function deleteConversation(id: string) {
-    if (!window.confirm('이 대화와 고소장 초안을 삭제할까요? 이 브라우저에서 복구할 수 없습니다.')) return
+    const target = conversations.find((conversation) => conversation.id === id)
+    if (!window.confirm(`이 대화와 ${target?.caseMode === 'respondent' ? '대응 메모' : '고소장 초안'}를 삭제할까요? 이 브라우저에서 복구할 수 없습니다.`)) return
     setConversations((current) => current.filter((item) => item.id !== id))
     if (activeId === id) setActiveId(null)
   }
@@ -320,7 +332,7 @@ export default function App() {
           {(index === 0 || dateLabel(orderedConversations[index - 1].updatedAt) !== dateLabel(conversation.updatedAt)) && <div className="conversation-date">{dateLabel(conversation.updatedAt)}</div>}
           <div className={`conversation-item ${activeId === conversation.id ? 'selected' : ''}`}>
               <button className="conversation-select" onClick={() => { setActiveId(conversation.id); setStartType(conversation.draft.type); setStartMode(conversation.caseMode || 'complainant'); setSidebarOpen(false) }}>
-              <MessageCircle size={17} /><span>{conversation.title}</span>
+              <MessageCircle size={17} /><span>{conversation.caseMode === 'respondent' ? '대응 · ' : '작성 · '}{conversation.title}</span>
             </button>
             <div className="conversation-actions">
               <button title="이름 변경" aria-label={`${conversation.title} 이름 변경`} onClick={() => renameConversation(conversation)}><MoreHorizontal size={16} /></button>
@@ -341,11 +353,11 @@ export default function App() {
       <header className="topbar">
         <div className="topbar-left">
           <button className="mobile-menu-button icon-button" aria-label="대화 목록 열기" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
-          <div className="topbar-title"><span className="topbar-eyebrow">AI 법률정보 도우미</span><strong>{active ? active.title : '새로운 대화'}</strong></div>
+          <div className="topbar-title"><span className="topbar-eyebrow">{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성 도움'}</span><strong>{active ? active.title : '새로운 대화'}</strong></div>
         </div>
         <div className="topbar-actions">
           <button className="topbar-link" onClick={() => setPrecedentOpen(true)}><BookOpen size={18} /><span>판례 검색</span>{Boolean(active?.precedents.length) && <b>{active?.precedents.length}</b>}</button>
-          {(!active || active.caseMode !== 'respondent') && <button className="topbar-link topbar-preview" onClick={() => { ensureConversation(startType); setPreviewOpen(true) }}><FileText size={18} /><span>고소장 미리보기</span></button>}
+          <button className="topbar-link topbar-preview" onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={18} /><span>{currentMode === 'respondent' ? '대응 메모' : '고소장 미리보기'}</span></button>
           <button className="topbar-avatar" onClick={() => setSettingsOpen(true)} aria-label="API 설정 열기"><KeyRound size={17} /></button>
         </div>
       </header>
@@ -371,7 +383,7 @@ export default function App() {
           </div>
           <div className="landing-composer">
             <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder={startMode === 'respondent' ? '예: 경찰에서 사기 혐의로 연락이 왔고, 다음 주 출석하라고 했어요.' : '예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요.'} rows={3} aria-label="사건 내용 입력" />
-            <div className="landing-composer-footer"><span>상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
+            <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
             <button onClick={() => setPrecedentOpen(true)}><BookOpen size={16} /> 판례 먼저 찾아보기</button>
@@ -379,7 +391,7 @@ export default function App() {
           </div>
           <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '문서 내용을 공유할 때는 이름·주소·사건번호 등 개인정보를 가려주세요.' : '대화는 이 브라우저에 저장되며, AI 답변은 검토용 초안으로 제공됩니다.'}</p>
         </div> : <div className="message-stream">
-          <div className="stream-intro"><span>사건 기록</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
+          <div className="stream-intro"><span>{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'}</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
           {active.messages.map((message) => <div className={`message-row ${message.role}`} key={message.id}>
             {message.role === 'assistant' && <span className="assistant-avatar"><Scale size={17} /></span>}
             <div className="message-content-stack">
@@ -421,7 +433,7 @@ export default function App() {
       {active?.messages.length ? <div className="composer-zone">
         <div className="quick-prompts">
           <button onClick={() => setPrecedentOpen(true)}><BookOpen size={15} /> 판례 검색</button>
-          {active.caseMode !== 'respondent' && <button onClick={() => { ensureConversation(); setPreviewOpen(true) }}><FileText size={15} /> 고소장 보기</button>}
+          <button onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={15} /> {currentMode === 'respondent' ? '대응 메모 보기' : '고소장 보기'}</button>
         </div>
         <div className="composer">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
@@ -431,7 +443,9 @@ export default function App() {
       </div> : null}
     </main>
 
-    {(!active || active.caseMode !== 'respondent') && <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
+    {currentMode === 'respondent'
+      ? <ResponsePanel draft={responseDraft} open={previewOpen} onOpen={() => { ensureConversation(startType, 'respondent'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateResponseDraft} />
+      : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}

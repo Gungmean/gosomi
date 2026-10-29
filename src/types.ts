@@ -1,5 +1,19 @@
 export type ComplaintType = 'fraud' | 'defamation' | 'assault' | 'general'
 export type CaseMode = 'complainant' | 'respondent'
+export interface ResponseDraft {
+  receivedDocument: string
+  agency: string
+  receivedAt: string
+  appearanceDate: string
+  allegation: string
+  claims: string
+  confirmedFacts: string
+  disputedPoints: string
+  evidenceToPreserve: string
+  questionsToConfirm: string
+  nextSteps: string
+}
+export const blankResponseDraft = (): ResponseDraft => ({ receivedDocument: '', agency: '', receivedAt: '', appearanceDate: '', allegation: '', claims: '', confirmedFacts: '', disputedPoints: '', evidenceToPreserve: '', questionsToConfirm: '', nextSteps: '' })
 export type Provider = 'openai' | 'anthropic' | 'gemini'
 
 export interface ComplaintDraft {
@@ -69,6 +83,7 @@ export interface Conversation {
   draft: ComplaintDraft
   precedents: Precedent[]
   caseMode?: CaseMode
+  responseDraft?: ResponseDraft
 }
 
 export interface AiSettings {
@@ -141,5 +156,6 @@ export const createConversation = (type: ComplaintType = 'general', caseMode: Ca
     draft: { ...blankDraft(), type },
     precedents: [],
     caseMode,
+    responseDraft: blankResponseDraft(),
   }
 }

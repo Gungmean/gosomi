@@ -139,7 +139,9 @@ const draftFields = [
   'evidence', 'request', 'relatedCase',
 ]
 
-function systemPrompt(draft, precedents, caseMode = 'complainant') {
+const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceDate', 'allegation', 'claims', 'confirmedFacts', 'disputedPoints', 'evidenceToPreserve', 'questionsToConfirm', 'nextSteps']
+
+function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}) {
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
     if (typeof value === 'string' && value.trim()) return [[key, value.slice(0, 1200)]]
     if (key === 'selections' && value && typeof value === 'object') {
@@ -157,23 +159,25 @@ function systemPrompt(draft, precedents, caseMode = 'complainant') {
 사용자는 고소장, 경찰 출석요구, 수사기관 연락 등을 받았을 수 있습니다. 먼저 어떤 문서를 언제 누구에게서 받았는지, 출석 일정이나 답변 기한이 있는지, 표시된 혐의가 무엇인지 확인하세요. 실제 문서에 적힌 정보와 사용자의 기억을 구분하고, 문서의 개인정보는 가리고 필요한 부분만 공유하도록 안내하세요.
 지금 당장 할 일로 원본 문서와 관련 대화·거래 내역을 보존하고, 연락한 기관의 공식 대표번호로 연락의 진위를 확인하도록 안내할 수 있습니다. 임박한 출석 일정이나 구속·접근금지 등 긴급한 상황에는 변호사 또는 공공 법률상담을 빠르게 알아보도록 안내하세요. 법률상 기한이나 절차를 추측해 단정하지 마세요.
 상대방의 "약점"이나 무죄를 단정하지 말고, 주장·제시된 근거·아직 확인되지 않은 점·사용자가 확인할 자료를 나눠 설명하세요. 문서 안의 날짜·금액 등 불일치 후보는 원문과 대조하도록 표시하세요. 증거 삭제·수정, 상대방 압박, 진술 맞추기 등 수사 방해 행동은 권하지 마세요.
-이 모드에서는 고소장 작성 필드(draftPatch)를 채우지 마세요. 의견서 초안이 요청되면 확인된 사실과 미확인 사항을 분리한 검토용 구조만 제시하고, 제출 전에 변호사 검토가 필요할 수 있음을 알려주세요.
+이 모드에서는 고소장 작성 필드(draftPatch)를 채우지 마세요. 대신 responsePatch에 현재 대화에서 확인된 정보만 채우세요. 각 값은 짧은 사실 중심 문장으로 쓰고, 모르는 값은 비워 두세요. disputedPoints는 상대 주장과 사용자 설명이 다른 부분 또는 확인할 불일치 후보이며 유무죄 판단이 아닙니다. nextSteps는 확인할 실무 행동만 쓰고 법정 기한을 추측하지 마세요. 기존 responseDraft 값은 명확한 정정이 없으면 지우지 마세요. 의견서 초안이 요청되면 확인된 사실과 미확인 사항을 분리한 검토용 구조만 제시하고, 제출 전에 변호사 검토가 필요할 수 있음을 알려주세요.
 ` : ''
-  return `당신은 한국어로 대화하는 고소장 작성 및 법률정보 보조 도우미 "고소미"입니다.
+  return `당신은 한국어로 대화하는 ${caseMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
 사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고, 현재까지 확인된 내용으로 가능한 안내를 먼저 제공한 뒤 핵심 질문 1~2개만 덧붙이세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
 아래 verifiedCases에 있는 판례만 사건번호와 링크를 근거로 언급할 수 있습니다. 관련성이 불분명하면 언급하지 마세요.
-사용자가 명시한 정보로만 draftPatch를 채우고, 기존 값을 임의로 지우지 마세요.
+${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : '사용자가 명시한 정보로만 draftPatch를 채우고, 기존 값을 임의로 지우지 마세요.'}
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 긴급한 안전 위협이 언급되면 신속한 기관/전문가 도움을 먼저 안내하세요.
 ${modeGuidance}
 필요한 확인 질문은 최대 4개까지 questions에 구조화하세요. 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
-{"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{"incidentDate":"..."},"searchQuery":"","questions":[{"id":"q1","text":"치료를 받으셨나요?","answerType":"yes_no","detailPrompt":"어느 병원에서 어떤 치료를 받으셨나요?"}]}
+{"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{},"responsePatch":{},"searchQuery":"","questions":[{"id":"q1","text":"치료를 받으셨나요?","answerType":"yes_no","detailPrompt":"어느 병원에서 어떤 치료를 받으셨나요?"}]}
 허용된 draftPatch 키: ${draftFields.join(', ')}
-현재 문서 상태: ${JSON.stringify(compactDraft)}
+허용된 responsePatch 키: ${responseFields.join(', ')}
+${caseMode === 'respondent' ? '' : `현재 고소장 상태: ${JSON.stringify(compactDraft)}`}
+현재 대응 메모 상태: ${JSON.stringify(Object.fromEntries(Object.entries(responseDraft || {}).filter(([key, value]) => responseFields.includes(key) && typeof value === 'string' && value.trim()).map(([key, value]) => [key, value.slice(0, 1200)])))}
 확인된 판례: ${JSON.stringify(verifiedCases)}`
 }
 
@@ -202,6 +206,7 @@ function parseAiOutput(output) {
     }
   }
   const draftPatch = {}
+  const responsePatch = {}
   const inputPatch = parsed?.draftPatch && typeof parsed.draftPatch === 'object' ? parsed.draftPatch : {}
   for (const field of draftFields) {
     const value = inputPatch[field]
@@ -211,9 +216,15 @@ function parseAiOutput(output) {
       }
     }
   }
+  const inputResponsePatch = parsed?.responsePatch && typeof parsed.responsePatch === 'object' ? parsed.responsePatch : {}
+  for (const field of responseFields) {
+    const value = inputResponsePatch[field]
+    if (typeof value === 'string' && value.trim()) responsePatch[field] = value.slice(0, 5000)
+  }
   return {
     message: String(parsed?.message || '내용을 조금 더 자세히 알려주시겠어요?').slice(0, 12000),
     draftPatch,
+    responsePatch,
     searchQuery: String(parsed?.searchQuery || '').slice(0, 80),
     followUpQuestions: (Array.isArray(parsed?.questions) ? parsed.questions : []).slice(0, 4).flatMap((question, index) => {
       const text = String(question?.text || '').trim().slice(0, 240)
@@ -568,17 +579,18 @@ async function callProvider(settings, messages, prompt) {
 }
 
 app.post('/api/chat', async (request, response) => {
-  const { settings, messages, draft, precedents, caseMode } = request.body || {}
+  const { settings, messages, draft, precedents, caseMode, responseDraft } = request.body || {}
   if (!settings || !Array.isArray(messages) || messages.length === 0) {
     response.status(400).json({ error: '대화 내용과 API 설정을 확인해주세요.' })
     return
   }
   try {
     const safeCaseMode = caseMode === 'respondent' ? 'respondent' : 'complainant'
-    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode))
+    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft))
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
     const result = parseAiOutput(output)
     if (safeCaseMode === 'respondent') result.draftPatch = {}
+    else result.responsePatch = {}
     if (typeof providerOutput !== 'string') {
       const selectedModel = normalizeProviderAndModel(settings).model
       if (providerOutput.model && providerOutput.model !== selectedModel) result.modelUsed = providerOutput.model

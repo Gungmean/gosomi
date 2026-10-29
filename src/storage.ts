@@ -1,5 +1,5 @@
 import type { AiSettings, Conversation } from './types'
-import { blankDraft, defaultModels } from './types'
+import { blankDraft, blankResponseDraft, defaultModels } from './types'
 
 const STORAGE_KEY = 'gosomi.conversations.v1'
 const SETTINGS_KEY = 'gosomi.settings.v1'
@@ -49,6 +49,8 @@ export function loadConversations(): Conversation[] {
     ).map((item) => ({
       ...item,
       draft: { ...blankDraft(), ...item.draft, selections: { ...(item.draft?.selections || {}) } },
+      caseMode: item.caseMode === 'respondent' ? 'respondent' : 'complainant',
+      responseDraft: { ...blankResponseDraft(), ...item.responseDraft },
       precedents: Array.isArray(item.precedents) ? item.precedents : [],
     }))
   } catch {
