@@ -10,16 +10,17 @@ export function isValidApiKeyFormat(value: string): boolean {
 }
 
 export function loadSettings(): AiSettings {
-  const fallback: AiSettings = { provider: 'gemini', model: defaultModels.gemini, apiKey: '' }
+  const fallback: AiSettings = { provider: 'gemini', model: defaultModels.gemini, apiKey: '', rememberApiKey: false }
   try {
     const raw = localStorage.getItem(SETTINGS_KEY)
     if (!raw) return fallback
     const parsed = JSON.parse(raw) as Partial<AiSettings>
     const provider = parsed.provider === 'openai' || parsed.provider === 'anthropic' ? parsed.provider : 'gemini'
     const model = typeof parsed.model === 'string' && parsed.model.trim() ? parsed.model.trim() : defaultModels[provider]
-    const rawKey = typeof parsed.apiKey === 'string' ? parsed.apiKey.replace(/\s+/g, '') : ''
+    const rememberApiKey = parsed.rememberApiKey === true
+    const rawKey = rememberApiKey && typeof parsed.apiKey === 'string' ? parsed.apiKey.replace(/\s+/g, '') : ''
     const apiKey = isValidApiKeyFormat(rawKey) ? rawKey : ''
-    return { provider, model, apiKey }
+    return { provider, model, apiKey, rememberApiKey }
   } catch {
     return fallback
   }
@@ -31,7 +32,8 @@ export function saveSettings(settings: AiSettings) {
     localStorage.setItem(SETTINGS_KEY, JSON.stringify({
       provider: settings.provider,
       model: settings.model,
-      apiKey: isValidApiKeyFormat(cleanKey) ? cleanKey : '',
+      rememberApiKey: settings.rememberApiKey === true,
+      apiKey: settings.rememberApiKey && isValidApiKeyFormat(cleanKey) ? cleanKey : '',
     }))
   } catch {
     // Ignore storage errors

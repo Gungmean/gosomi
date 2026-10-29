@@ -112,6 +112,7 @@ export interface AiSettings {
   provider: Provider
   model: string
   apiKey: string
+  rememberApiKey?: boolean
 }
 
 export const templateLabels: Record<ComplaintType, string> = {

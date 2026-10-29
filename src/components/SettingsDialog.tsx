@@ -107,7 +107,11 @@ export default function SettingsDialog({ open, onOpenChange, settings, onChange 
           {hasNonAsciiKey && <small style={{ color: '#c83a32', fontWeight: 600 }}>API 키 입력란에 한글이 입력되었습니다. 대화 내용이 아닌 영문·숫자 API 키(예: AIza...)를 붙여넣어 주세요.</small>}
         </label>
 
-        <div className="settings-security"><ShieldCheck size={18} /><span>API 키는 새로고침 뒤에도 유지되도록 이 브라우저의 로컬 저장소에 저장됩니다. 암호화 저장은 아니므로 공유 기기에서는 사용 후 키를 지우고, 요청 시 선택한 AI 제공자에게 전송됩니다.</span></div>
+        <label className="settings-remember-key">
+          <input type="checkbox" checked={settings.rememberApiKey === true} onChange={(event) => onChange({ ...settings, rememberApiKey: event.target.checked })} />
+          <span>이 기기에 API 키 저장</span>
+        </label>
+        <div className="settings-security"><ShieldCheck size={18} /><span>API 키는 기본적으로 현재 탭에서만 사용하며 저장하지 않습니다. 저장을 선택하면 암호화되지 않은 브라우저 로컬 저장소에 보관됩니다. 대화와 첨부 문서는 이 브라우저에 저장되고, 전송 시 대화 내용·작성 중인 초안·첨부 문서가 선택한 AI 제공자에게 전달됩니다.</span></div>
         <button className="dialog-primary" type="button" disabled={hasNonAsciiKey} onClick={() => onOpenChange(false)}>설정 완료</button>
       </Dialog.Content>
     </Dialog.Portal>

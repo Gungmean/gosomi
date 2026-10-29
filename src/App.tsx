@@ -214,6 +214,15 @@ export default function App() {
       setNotice('API 키 입력란에 한글이나 잘못된 문자가 들어갔습니다. 영문·숫자로 된 API 키(예: AIza...)를 다시 입력해주세요.')
       return
     }
+    try {
+      if (sessionStorage.getItem('gosomi.ai-data-disclosure.v1') !== 'accepted') {
+        const accepted = window.confirm('AI 요청 전 개인정보 안내\n\n답변을 만들기 위해 대화 내용, 현재 작성 중인 고소장 또는 대응 메모, 선택한 판례, 분석을 요청한 첨부 문서가 선택한 AI 제공자에게 전송됩니다. 주민등록번호·주소·연락처·계좌번호·실명 등은 가능한 한 가리고 보내세요.\n\n계속하면 현재 탭을 사용하는 동안 이 안내를 다시 표시하지 않습니다.')
+        if (!accepted) return
+        sessionStorage.setItem('gosomi.ai-data-disclosure.v1', 'accepted')
+      }
+    } catch {
+      if (!window.confirm('답변을 위해 대화 내용과 선택한 첨부 문서가 외부 AI 제공자에게 전송됩니다. 개인정보를 가리고 계속할까요?')) return
+    }
     const target = active || createConversation(startType, startMode)
     const pendingDocuments = target.caseMode === 'respondent' ? (target.receivedDocuments || []).filter((item) => !item.analyzed) : []
     if (!active) {
@@ -433,7 +442,7 @@ export default function App() {
             <button onClick={() => setPrecedentOpen(true)}><BookOpen size={16} /> 판례 먼저 찾아보기</button>
             {startMode === 'complainant' && <button onClick={() => { ensureConversation(startType); setPreviewOpen(true) }}><FileText size={16} /> 고소장 양식 보기</button>}
           </div>
-          <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '문서 내용을 공유할 때는 이름·주소·사건번호 등 개인정보를 가려주세요.' : '대화는 이 브라우저에 저장되며, AI 답변은 검토용 초안으로 제공됩니다.'}</p>
+          <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '첨부 문서를 분석하면 내용이 선택한 AI 제공자에게 전송됩니다. 이름·주소·사건번호 등은 먼저 가려주세요.' : '대화와 초안은 이 브라우저에 저장됩니다. 전송 시 선택한 AI 제공자에게 전달되며, 답변은 검토용입니다.'}</p>
         </div> : <div className="message-stream">
           <div className="stream-intro"><span>{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'}</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
           {active.messages.map((message) => <div className={`message-row ${message.role}`} key={message.id}>
@@ -484,7 +493,7 @@ export default function App() {
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
           <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
         </div>
-        <p className="composer-note">{active?.caseMode === 'respondent' ? '고소장 내용은 개인정보를 가리고 필요한 부분만 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '작성된 사실관계와 초안은 제출 전에 직접 확인해주세요.'}</p>
+        <p className="composer-note">{active?.caseMode === 'respondent' ? '대화와 첨부 문서는 선택한 AI 제공자에게 전송됩니다. 개인정보를 가리고 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '대화와 고소장 초안은 답변을 위해 선택한 AI 제공자에게 전송됩니다. 제출 전 사실관계와 초안을 직접 확인해주세요.'}</p>
       </div> : null}
     </main>
 
