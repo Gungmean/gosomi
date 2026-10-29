@@ -3,7 +3,7 @@ import { MotionConfig } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import {
   ArrowRight, BookOpen, FileText, History,
-  KeyRound, Menu, MessageCircle, MoreHorizontal, Plus, Scale,
+  KeyRound, Menu, MessageCircle, MoreHorizontal, Plus,
   Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
 import { askAi, searchPrecedents } from './api'
@@ -462,7 +462,6 @@ export default function App() {
         </div> : <div className="message-stream">
           <div className="stream-intro"><span>{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'}</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
           {active.messages.map((message) => <div className={`message-row ${message.role}`} key={message.id}>
-            {message.role === 'assistant' && <span className="assistant-avatar"><Scale size={17} /></span>}
             <div className="message-content-stack">
               <div className="message-bubble">
                 {message.role === 'assistant' && <span className="message-author">고소미</span>}
@@ -493,7 +492,7 @@ export default function App() {
               />}
             </div>
           </div>)}
-          {busy && <div className="message-row assistant"><span className="assistant-avatar"><Scale size={17} /></span><div className="typing-bubble"><span /><span /><span /></div></div>}
+          {busy && <div className="message-row assistant"><div className="typing-bubble"><span /><span /><span /></div></div>}
           {Boolean(active.precedents.length) && <button className="cases-inline" onClick={() => setPrecedentOpen(true)}><span className="cases-inline-icon"><BookOpen size={20} /></span><span><strong>관련 판례 {active.precedents.length}건을 찾았어요</strong><small>국가법령정보센터 원문에서 확인해보세요</small></span><ArrowRight size={18} /></button>}
           <div ref={scrollEnd} />
         </div>}

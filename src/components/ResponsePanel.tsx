@@ -42,7 +42,7 @@ export default function ResponsePanel({ draft, open, onOpen, onClose, onChange }
     <AnimatePresence initial={false}>
       {open && <motion.button key="response-scrim" className="panel-scrim" aria-label="대응 메모 닫기" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} />}
       {open && <motion.aside key="response-panel" className="preview-panel" aria-label="대응 메모 패널" initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }} transition={{ type: 'tween', duration: .24 }}>
-        <div className="panel-header"><div className="panel-header-icon"><FileText size={20} /></div><div className="panel-header-copy"><strong>고소장 수령 대응 메모</strong><span>대화에서 확인된 내용을 직접 수정할 수 있습니다</span></div><button className="icon-button" aria-label="패널 닫기" onClick={onClose}><X size={20} /></button></div>
+        <div className="panel-header"><div className="panel-header-copy"><strong>고소장 수령 대응 메모</strong><span>대화에서 확인된 내용을 직접 수정할 수 있습니다</span></div><button className="icon-button" aria-label="패널 닫기" onClick={onClose}><X size={20} /></button></div>
         <Tabs.Root value={tab} onValueChange={setTab} className="panel-tabs-root">
           <Tabs.List className="panel-tabs" aria-label="대응 메모 보기 선택"><Tabs.Trigger value="preview"><FileText size={16} /> 미리보기</Tabs.Trigger><Tabs.Trigger value="edit"><Pencil size={16} /> 내용 수정</Tabs.Trigger></Tabs.List>
           <Tabs.Content value="preview" className="panel-content panel-preview-scroll"><div className="preview-notice"><span className="preview-notice-dot" /> 상담·조사 준비용 메모 · 공식 제출 서식 아님</div>

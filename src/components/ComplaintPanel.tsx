@@ -109,7 +109,6 @@ export default function ComplaintPanel({
             transition={{ type: 'tween', duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
           >
             <div className="panel-header">
-              <div className="panel-header-icon"><FileText size={20} /></div>
               <div className="panel-header-copy"><strong>고소장 작성</strong><span>입력한 내용이 문서에 바로 반영됩니다</span></div>
               <button className="icon-button" aria-label="패널 닫기" onClick={onClose}><X size={20} /></button>
             </div>

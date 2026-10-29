@@ -130,7 +130,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .stream-intro small { font-size: 11px; color: #9aa39b; font-weight: 450; }
 .message-row { display: flex; align-items: flex-start; gap: 10px; }
 .message-row.user { justify-content: flex-end; }
-.assistant-avatar { width: 31px; height: 31px; border-radius: 9px; flex: 0 0 31px; display: grid; place-items: center; color: var(--green); background: #e9f4eb; }
 .message-content-stack { min-width: 0; }
 .message-row.assistant .message-content-stack { flex: 1; }
 .message-row.user .message-content-stack { max-width: min(85%, 640px); }
@@ -277,7 +276,6 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .preview-panel { width: clamp(340px, 35vw, 540px); box-shadow: -10px 0 28px #09190c16; }
 }
 .panel-header { height: 77px; flex: 0 0 77px; display: flex; align-items: center; gap: 11px; border-bottom: 1px solid var(--line); padding: 0 22px; }
-.panel-header-icon { width: 37px; height: 37px; display: grid; place-items: center; border-radius: 10px; background: #e9f4eb; color: var(--green); }
 .panel-header-copy { display: grid; gap: 3px; flex: 1; }
 .panel-header-copy strong { font-size: 15px; font-weight: 750; }
 .panel-header-copy span { color: #989e98; font-size: 11px; }
