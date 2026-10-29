@@ -294,7 +294,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .official-checkmark { position: absolute; z-index: 2; display: grid; place-items: center; color: #111; font-family: Arial, sans-serif; font-size: clamp(10px, 1.3vw, 17px); font-weight: 800; line-height: 1; pointer-events: none; }
 .official-value { position: absolute; z-index: 1; display: block; overflow: hidden; min-width: 0; padding: 1px 2px; border: 0; border-radius: 1px; background: #ffffffbd; color: #172019; text-align: left; vertical-align: top; white-space: nowrap; text-overflow: clip; font-family: 'Malgun Gothic', '맑은 고딕', 'Pretendard', sans-serif; font-size: 11px; font-weight: 400; line-height: 1.25; cursor: pointer; }
 .official-value:hover, .official-value:focus-visible { outline: 1px solid #006617; background: #ffffffed; }
-.official-value-multiline { overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
+.official-value-multiline { overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.05; }
 .official-source { margin: 0 2px 9px; color: #909990; font-size: 9px; line-height: 1.5; }
 .official-source a { color: #617b66; text-decoration: underline; text-underline-offset: 2px; }
 .official-attachment { min-height: 750px; padding: 8% 7%; }

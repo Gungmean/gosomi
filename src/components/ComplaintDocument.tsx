@@ -22,8 +22,8 @@ function needsSupplementalPage(draft: ComplaintDraft) {
   return Boolean(
     draft.reason || draft.evidence || draft.request || draft.relatedCase ||
     singleLineFields.some(([value, limit]) => String(value).length > Number(limit)) ||
-    (draft.incidentSummary && draft.incidentSummary.length > (draft.type === 'fraud' ? 90 : 150)) ||
-    (draft.damage && draft.damage.length > 35),
+    (draft.incidentSummary && draft.incidentSummary.length > 45) ||
+    (draft.damage && draft.damage.length > 18),
   )
 }
 
@@ -82,8 +82,8 @@ function OfficialComplaint({
       second: {
         complainantName: { left: '43%', top: '91.2%', width: '37%' },
         incidentPlace: { left: '36%', top: '8.7%', width: '59%' },
-        incidentSummary: { left: '36%', top: '11.6%', width: '60%', height: '4%' },
-        damage: { left: '39%', top: '17%', width: '45%' },
+        incidentSummary: { left: '36%', top: '11.6%', width: '60%', height: '4%', size: '10px' },
+        damage: { left: '41%', top: '17%', width: '43%' },
       },
     },
     defamation: {
@@ -155,7 +155,14 @@ function OfficialComplaint({
   }
   const makeFields = (mapping: Record<string, Position>) => Object.entries(mapping)
     .filter(([field]) => values[field])
-    .map(([field, position]) => ({ field, value: values[field], position, multiline: field === 'incidentSummary' || field === 'evidence' }))
+    .map(([field, position]) => {
+      const value = values[field]
+      const maxPreviewLength = field === 'incidentSummary' ? 45 : field === 'damage' ? 18 : undefined
+      const previewValue = maxPreviewLength && value.length > maxPreviewLength
+        ? `${value.slice(0, maxPreviewLength - 1).trimEnd()}…`
+        : value
+      return { field, value: previewValue, position, multiline: field === 'incidentSummary' || field === 'evidence' }
+    })
 
   const needsAttachment = needsSupplementalPage(draft)
   const attachmentRows = [
