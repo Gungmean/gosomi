@@ -2,6 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -262,42 +263,6 @@ function parseAiOutput(output, caseMode = 'complainant') {
       }]
     }),
   }
-}
-
-const complaintIntakeSteps = [
-  { field: 'incidentDate', text: '사건이 발생한 날짜를 알고 계신가요? 연·월·일 중 기억나는 범위만 적어도 됩니다.' },
-  { field: 'incidentTime', text: '사건이 발생한 시간대를 기억하시나요? 정확한 시각을 모르면 건너뛰어도 됩니다.' },
-  { field: 'incidentPlace', text: '사건이 발생한 장소나 거래 앱·사이트를 알려주세요.' },
-  { field: 'incidentSummary', text: '어떤 일이 있었는지 기억나는 순서대로 한두 문장으로 설명해 주세요.' },
-  { field: 'damage', text: '이번 일로 실제로 입거나 부담한 피해가 무엇인가요? 금액이 아직 불확실하면 그렇게 적어도 됩니다.' },
-  { field: 'reason', text: '고소를 통해 확인하거나 해결하고 싶은 점이 있나요? 아직 정하지 않았다면 건너뛰어도 됩니다.' },
-  { field: 'evidence', text: '현재 가지고 있거나 확보할 수 있는 자료는 무엇인가요? 예: 대화 캡처, 이체 내역, 사진, 목격자.' },
-  { field: 'request', text: '처벌에 관한 의사를 정하셨나요? 아직 정하지 않았다면 건너뛰어도 됩니다.' },
-  { field: 'relatedCase', text: '같은 사건으로 신고·수사·재판이 진행 중이거나 접수한 적이 있나요? 모르면 건너뛰어도 됩니다.' },
-]
-
-function nextComplaintIntakeQuestion(draft, messages) {
-  const conversation = Array.isArray(messages) ? messages : []
-  const latestUserText = [...conversation].reverse().find((message) => message?.role === 'user')?.text || ''
-  const describesCase = /고소장.{0,8}(작성|초안)|고소.{0,8}(하고 싶|하려)|피해|사건|사기|폭행|명예훼손|모욕|경찰.{0,8}(연락|신고)|돈을 보냈|이체|계약/.test(latestUserText) || latestUserText.trim().length >= 70
-  const previousMessage = conversation.at(-2)
-  const answeredIntakeCard = previousMessage?.role === 'assistant' && previousMessage.followUpSubmitted && (previousMessage.followUpQuestions || []).some((question) => complaintIntakeSteps.some((step) => step.field === question.id))
-  if (!describesCase && !answeredIntakeCard) return null
-
-  const skippedFields = new Set()
-  for (const message of conversation) {
-    if (message?.role !== 'assistant' || !message.followUpSubmitted) continue
-    for (const question of message.followUpQuestions || []) {
-      const step = complaintIntakeSteps.find((item) => item.field === question.id)
-      if (!step) continue
-      const answer = message.followUpAnswers?.[question.id] || {}
-      if (answer.choice === 'unknown' || /모름|건너뛰|나중에 직접|아직 정하지 않음/i.test(answer.text || '')) skippedFields.add(step.field)
-    }
-  }
-
-  const next = complaintIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !skippedFields.has(step.field))
-  if (!next) return null
-  return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
 }
 
 function normalizeProviderAndModel(settings) {
@@ -656,7 +621,7 @@ async function callProvider(settings, messages, prompt, documentInput = {}) {
 }
 
 app.post('/api/chat', async (request, response) => {
-  const { settings, messages, draft, precedents, caseMode, responseDraft, documentInput } = request.body || {}
+  const { settings, messages, draft, precedents, caseMode, responseDraft, documentInput, intakeSubmission } = request.body || {}
   if (!settings || !Array.isArray(messages) || messages.length === 0) {
     response.status(400).json({ error: '대화 내용과 API 설정을 확인해주세요.' })
     return
@@ -669,7 +634,9 @@ app.post('/api/chat', async (request, response) => {
     if (safeCaseMode === 'respondent') result.draftPatch = {}
     else {
       result.responsePatch = {}
+      result.draftPatch = applyCurrentIntakeAnswer(result.draftPatch, draft, intakeSubmission)
       result.followUpQuestions = nextComplaintIntakeQuestion({ ...draft, ...result.draftPatch }, messages) || []
+      result.message = alignMessageWithIntakeQuestion(result.message, result.followUpQuestions)
     }
     if (typeof providerOutput !== 'string') {
       const selectedModel = normalizeProviderAndModel(settings).model

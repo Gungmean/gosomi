@@ -251,7 +251,14 @@ export default function App() {
     setBusy(true)
     try {
       const documentInput = pendingDocuments.length ? await prepareDocumentInput(pendingDocuments) : undefined
-      const result = await askAi(settings, messagesForAi, target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft, documentInput)
+      const submittedAnswers = followUpSubmission?.answers || {}
+      const submittedCard = followUpSubmission && target.messages.find((message) => message.id === followUpSubmission.messageId)
+      const submittedQuestion = submittedCard?.followUpQuestions?.find((question) => question.id in submittedAnswers)
+      const submittedAnswer = submittedQuestion && submittedAnswers[submittedQuestion.id]
+      const intakeSubmission = submittedQuestion && submittedAnswer
+        ? { questionId: submittedQuestion.id, text: submittedAnswer.text, choice: submittedAnswer.choice }
+        : undefined
+      const result = await askAi(settings, messagesForAi, target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft, documentInput, intakeSubmission)
       const responseText = result.modelUsed
         ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
         : result.message
