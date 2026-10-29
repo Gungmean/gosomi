@@ -107,7 +107,7 @@ export default function SettingsDialog({ open, onOpenChange, settings, onChange 
           {hasNonAsciiKey && <small style={{ color: '#c83a32', fontWeight: 600 }}>API 키 입력란에 한글이 입력되었습니다. 대화 내용이 아닌 영문·숫자 API 키(예: AIza...)를 붙여넣어 주세요.</small>}
         </label>
 
-        <div className="settings-security"><ShieldCheck size={18} /><span>키는 이 브라우저에 안전하게 보관되며, 요청 시 중계 서버를 거쳐 선택한 AI 제공자에게만 전달됩니다.</span></div>
+        <div className="settings-security"><ShieldCheck size={18} /><span>API 키는 새로고침 뒤에도 유지되도록 이 브라우저의 로컬 저장소에 저장됩니다. 암호화 저장은 아니므로 공유 기기에서는 사용 후 키를 지우고, 요청 시 선택한 AI 제공자에게 전송됩니다.</span></div>
         <button className="dialog-primary" type="button" disabled={hasNonAsciiKey} onClick={() => onOpenChange(false)}>설정 완료</button>
       </Dialog.Content>
     </Dialog.Portal>

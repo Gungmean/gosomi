@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import { useReducedMotion } from 'motion/react'
 import Typed from 'typed.js'
 import type { ComplaintType } from '../types'
 
@@ -86,11 +87,12 @@ export function TypedSpan({
 }) {
   const elRef = useRef<HTMLSpanElement>(null)
   const onCompleteRef = useRef(onComplete)
+  const reduceMotion = useReducedMotion()
   onCompleteRef.current = onComplete
 
   useEffect(() => {
     const element = elRef.current
-    if (!element) return
+    if (!element || reduceMotion) return
     element.textContent = ''
 
     const typed = new Typed(element, {
@@ -109,9 +111,9 @@ export function TypedSpan({
     return () => {
       typed.destroy()
     }
-  }, [text, typeSpeed, startDelay, showCursor, cursorChar])
+  }, [text, typeSpeed, startDelay, showCursor, cursorChar, reduceMotion])
 
-  return <span ref={elRef} />
+  return reduceMotion ? <span>{text}</span> : <span ref={elRef} />
 }
 
 /**
@@ -132,13 +134,14 @@ export function TypewriterMarkdown({
 }) {
   const [charCount, setCharCount] = useState(() => (active ? 0 : text.length))
   const [isTyping, setIsTyping] = useState(() => active && text.length > 0)
+  const reduceMotion = useReducedMotion()
   const onProgressRef = useRef(onProgress)
   const onCompleteRef = useRef(onComplete)
   onProgressRef.current = onProgress
   onCompleteRef.current = onComplete
 
   useEffect(() => {
-    if (!active || text.length === 0) {
+    if (!active || text.length === 0 || reduceMotion) {
       setCharCount(text.length)
       setIsTyping(false)
       if (active) onCompleteRef.current?.()
@@ -174,7 +177,7 @@ export function TypewriterMarkdown({
     return () => {
       window.clearInterval(timer)
     }
-  }, [active, text])
+  }, [active, text, reduceMotion])
 
   function finishImmediately() {
     if (!isTyping) return
@@ -208,7 +211,9 @@ export function TypedDocumentText({
   animateKey?: string
 }) {
   const [completedKey, setCompletedKey] = useState<string | null>(null)
+  const reduceMotion = useReducedMotion()
   const shouldAnimate = Boolean(
+    !reduceMotion &&
     animateKey &&
     completedKey !== animateKey &&
     text.trim().length > 0,
@@ -268,13 +273,14 @@ export function useTypedPlaceholder(
   hasInput: boolean,
   isWelcome: boolean,
 ) {
+  const reduceMotion = useReducedMotion()
   useEffect(() => {
     if (!isWelcome) return
     const element = textareaRef.current
     if (!element) return
 
     const examples = PLACEHOLDER_EXAMPLES[complaintType] || PLACEHOLDER_EXAMPLES.general
-    if (hasInput) {
+    if (hasInput || reduceMotion) {
       element.setAttribute('placeholder', examples[0])
       return
     }
@@ -297,5 +303,5 @@ export function useTypedPlaceholder(
       typed.destroy()
       element.setAttribute('placeholder', examples[0])
     }
-  }, [textareaRef, complaintType, hasInput, isWelcome])
+  }, [textareaRef, complaintType, hasInput, isWelcome, reduceMotion])
 }

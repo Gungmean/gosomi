@@ -423,13 +423,13 @@ async function callGemini(model, apiKey, conversation, prompt) {
     ? (conversation[0]?.content || '안녕하세요.')
     : `[이전 대화 기록]\n${conversation.slice(0, -1).map((item) => `${item.role === 'assistant' ? '고소미(이전 답변)' : '사용자'}: ${item.content}`).join('\n\n')}\n\n[현재 사용자 입력]\n${conversation[conversation.length - 1].content}`
 
-  // Fallback across active Gemini 3.x Flash models when a specific model hits 429 (quota/rate limit) or 503 (overload)
-  const candidateModels = [
-    model,
-    'gemini-3.8-flash',
-    'gemini-3.6-flash',
-    'gemini-3.5-flash-lite',
-  ].filter((candidate, index, list) => Boolean(candidate) && list.indexOf(candidate) === index)
+  // Only fall back to a lower-capability preset, and report the model used to the client.
+  const fallbackModels = model === 'gemini-3.8-flash'
+    ? ['gemini-3.6-flash', 'gemini-3.5-flash-lite']
+    : model === 'gemini-3.6-flash'
+      ? ['gemini-3.5-flash-lite']
+      : []
+  const candidateModels = [model, ...fallbackModels]
 
   let lastResponse = null
   let lastData = {}
@@ -444,7 +444,7 @@ async function callGemini(model, apiKey, conversation, prompt) {
 
     if (response.ok) {
       const text = extractGeminiGenerateContentText(data)
-      if (text) return text
+      if (text) return { text, model: candidate }
       const blockReason = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason
       if (blockReason === 'SAFETY' || blockReason === 'BLOCKLIST' || blockReason === 'PROHIBITED_CONTENT') {
         throw new Error('입력 내용에 민감한 표현이 포함되어 AI 안전 정책에 의해 응답이 제한되었습니다. 표현을 완화해 다시 시도해주세요.')
@@ -457,8 +457,8 @@ async function callGemini(model, apiKey, conversation, prompt) {
       throwProviderHttpError('gemini', apiKey, response, data)
     }
 
-    // If rate-limited (429), overloaded (503), or unavailable (404), try the next Gemini model in the chain
-    if ([429, 503, 404].includes(response.status) && i < candidateModels.length - 1) {
+    // Retry only quota and temporary-overload responses on the explicit lower-tier fallback chain.
+    if ([429, 503].includes(response.status) && i < candidateModels.length - 1) {
       await new Promise((resolveDelay) => setTimeout(resolveDelay, 300))
       continue
     }
@@ -491,7 +491,7 @@ async function callGemini(model, apiKey, conversation, prompt) {
     const intData = await intResponse.json().catch(() => ({}))
     if (intResponse.ok) {
       const intText = extractGeminiInteractionsText(intData)
-      if (intText) return intText
+      if (intText) return { text: intText, model }
     }
   }
 
@@ -566,8 +566,14 @@ app.post('/api/chat', async (request, response) => {
     return
   }
   try {
-    const output = await callProvider(settings, messages, systemPrompt(draft, precedents))
-    response.json(parseAiOutput(output))
+    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents))
+    const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
+    const result = parseAiOutput(output)
+    if (typeof providerOutput !== 'string') {
+      const selectedModel = normalizeProviderAndModel(settings).model
+      if (providerOutput.model && providerOutput.model !== selectedModel) result.modelUsed = providerOutput.model
+    }
+    response.json(result)
   } catch (error) {
     const timedOut = error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
     const message = timedOut ? 'AI 응답이 제한 시간 안에 도착하지 않았습니다. 잠시 후 다시 시도해주세요.'

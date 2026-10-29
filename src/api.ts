@@ -13,7 +13,7 @@ export async function askAi(
   messages: ChatMessage[],
   draft: ComplaintDraft,
   precedents: Precedent[],
-): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[] }> {
+): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string }> {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

@@ -186,7 +186,10 @@ export default function App() {
     setBusy(true)
     try {
       const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents)
-      const assistantMessage = makeMessage('assistant', result.message)
+      const responseText = result.modelUsed
+        ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
+        : result.message
+      const assistantMessage = makeMessage('assistant', responseText)
       assistantMessage.followUpQuestions = result.followUpQuestions
       const changedDraftFields: Record<string, string> = {}
       for (const [key, value] of Object.entries(result.draftPatch)) {
@@ -290,7 +293,7 @@ export default function App() {
     newConversation(type)
   }
 
-  return <MotionConfig reducedMotion="never"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
+  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
         <button className="brand" onClick={() => { setActiveId(null); setSidebarOpen(false) }} aria-label="고소미 홈으로">
