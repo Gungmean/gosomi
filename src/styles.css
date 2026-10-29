@@ -290,12 +290,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .rotate-180 { transform: rotate(180deg); }
 
 /* Document */
-.official-document { width: 100%; max-width: 565px; margin: 0 auto; }
+.official-document { width: 100%; max-width: 565px; margin: 0 auto; container-type: inline-size; }
 .official-form-note { padding: 0 3px 11px; color: #68766b; font-size: 10px; line-height: 1.5; }
 .official-page { position: relative; width: 100%; aspect-ratio: 1819 / 2570; margin: 0 auto 16px; overflow: hidden; background: #fff; box-shadow: 0 8px 35px #1c2f1d18; }
 .official-page-image { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: fill; }
 .official-checkmark { position: absolute; z-index: 2; display: grid; place-items: center; color: #111; font-family: Arial, sans-serif; font-size: clamp(10px, 1.3vw, 17px); font-weight: 800; line-height: 1; pointer-events: none; }
-.official-value { position: absolute; z-index: 1; display: block; overflow: hidden; min-width: 0; padding: 1px 2px; border: 0; border-radius: 1px; background: #ffffffbd; color: #172019; text-align: left; vertical-align: top; white-space: nowrap; text-overflow: clip; font-family: 'Malgun Gothic', '맑은 고딕', 'Pretendard', sans-serif; font-size: 11px; font-weight: 400; line-height: 1.25; cursor: pointer; }
+.official-value { position: absolute; z-index: 1; display: block; overflow: hidden; min-width: 0; padding: 1px 2px; border: 0; border-radius: 1px; background: #ffffffbd; color: #172019; text-align: left; vertical-align: top; white-space: nowrap; text-overflow: clip; font-family: 'Malgun Gothic', '맑은 고딕', 'Pretendard', sans-serif; font-size: clamp(5px, 1.9cqw, 16px); font-weight: 400; line-height: 1.25; cursor: pointer; }
 .official-value:hover, .official-value:focus-visible { outline: 1px solid #006617; background: #ffffffed; }
 .official-value-multiline { overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.05; }
 .official-source { margin: 0 2px 9px; color: #909990; font-size: 9px; line-height: 1.5; }
@@ -519,7 +519,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .official-page:nth-of-type(3) { break-after: page; page-break-after: always; }
   .official-page-image { width: 100%; height: 100%; }
   .official-checkmark { font-size: 13pt; }
-  .official-value { padding: 0 1px; border-radius: 0; background: #ffffffed; font-size: 10pt; }
+  .official-value { padding: 0 1px; border-radius: 0; background: #ffffffed; }
   .official-attachment { width: 210mm; height: auto; min-height: 297mm; aspect-ratio: auto; padding: 18mm; box-shadow: none; break-after: auto; page-break-after: auto; break-inside: auto; page-break-inside: auto; }
   .official-attachment h1 { font-size: 16pt; }
 }

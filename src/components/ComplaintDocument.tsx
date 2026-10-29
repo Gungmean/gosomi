@@ -22,7 +22,7 @@ function needsSupplementalPage(draft: ComplaintDraft) {
   return Boolean(
     draft.reason || draft.evidence || draft.request || draft.relatedCase ||
     singleLineFields.some(([value, limit]) => String(value).length > Number(limit)) ||
-    (draft.incidentSummary && draft.incidentSummary.length > 45) ||
+    (draft.incidentSummary && draft.incidentSummary.length > 30) ||
     (draft.damage && draft.damage.length > 18),
   )
 }
@@ -81,9 +81,9 @@ function OfficialComplaint({
       },
       second: {
         complainantName: { left: '43%', top: '91.2%', width: '37%' },
-        incidentPlace: { left: '36%', top: '8.7%', width: '59%' },
-        incidentSummary: { left: '36%', top: '11.6%', width: '60%', height: '4%', size: '10px' },
-        damage: { left: '41%', top: '17%', width: '43%' },
+        incidentPlace: { left: '36%', top: '8.7%', width: '52%' },
+        incidentSummary: { left: '36%', top: '11.5%', width: '51.5%', height: '3.9%', size: '1.45cqw' },
+        damage: { left: '40%', top: '17.4%', width: '36%' },
       },
     },
     defamation: {
@@ -157,7 +157,13 @@ function OfficialComplaint({
     .filter(([field]) => values[field])
     .map(([field, position]) => {
       const value = values[field]
-      const maxPreviewLength = field === 'incidentSummary' ? 45 : field === 'damage' ? 18 : undefined
+      const previewLengths: Record<string, number> = {
+        complainantName: 12, complainantAddress: 34, complainantPhone: 20,
+        accusedName: 12, accusedAddress: 34, accusedPhone: 20,
+        accusedOnlineId: 28, accusedAccount: 32, incidentDate: 20,
+        incidentTime: 18, incidentPlace: 34, incidentSummary: 30, damage: 18,
+      }
+      const maxPreviewLength = previewLengths[field]
       const previewValue = maxPreviewLength && value.length > maxPreviewLength
         ? `${value.slice(0, maxPreviewLength - 1).trimEnd()}…`
         : value
