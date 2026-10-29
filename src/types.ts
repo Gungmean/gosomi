@@ -1,4 +1,5 @@
 export type ComplaintType = 'fraud' | 'defamation' | 'assault' | 'general'
+export type CaseMode = 'complainant' | 'respondent'
 export type Provider = 'openai' | 'anthropic' | 'gemini'
 
 export interface ComplaintDraft {
@@ -67,6 +68,7 @@ export interface Conversation {
   messages: ChatMessage[]
   draft: ComplaintDraft
   precedents: Precedent[]
+  caseMode?: CaseMode
 }
 
 export interface AiSettings {
@@ -128,7 +130,7 @@ export const blankDraft = (): ComplaintDraft => ({
   selections: {},
 })
 
-export const createConversation = (type: ComplaintType = 'general'): Conversation => {
+export const createConversation = (type: ComplaintType = 'general', caseMode: CaseMode = 'complainant'): Conversation => {
   const now = Date.now()
   return {
     id: crypto.randomUUID(),
@@ -138,5 +140,6 @@ export const createConversation = (type: ComplaintType = 'general'): Conversatio
     messages: [],
     draft: { ...blankDraft(), type },
     precedents: [],
+    caseMode,
   }
 }

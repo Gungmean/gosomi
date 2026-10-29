@@ -239,22 +239,20 @@ export function TypedDocumentText({
 /**
  * Welcome Hero Title with typing animation via Typed.js.
  */
-export function WelcomeTypedHeading() {
+export function WelcomeTypedHeading({ respondent = false }: { respondent?: boolean }) {
   const [done, setDone] = useState(false)
+  const text = respondent ? '받은 고소장, 함께 살펴봐요.' : '무슨 일이 있었는지 들려주세요.'
 
   if (done) {
     return (
-      <h1>
-        무슨 일이 있었는지
-        <br className="welcome-mobile-break" /> 들려주세요.
-      </h1>
+      <h1>{respondent ? <>받은 고소장,<br className="welcome-mobile-break" /> 함께 살펴봐요.</> : <>무슨 일이 있었는지<br className="welcome-mobile-break" /> 들려주세요.</>}</h1>
     )
   }
 
   return (
-    <h1 aria-label="무슨 일이 있었는지 들려주세요.">
+    <h1 aria-label={text}>
       <TypedSpan
-        text="무슨 일이 있었는지 들려주세요."
+        text={text}
         typeSpeed={42}
         showCursor={true}
         cursorChar="▍"
