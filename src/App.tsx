@@ -448,7 +448,10 @@ export default function App() {
           </div>
           {startMode === 'respondent' && <ReceivedDocuments documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}
           <div className="landing-composer">
-            <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder={startMode === 'respondent' ? '예: 경찰에서 사기 혐의로 연락이 왔고, 다음 주 출석하라고 했어요.' : '예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요.'} rows={3} aria-label="사건 내용 입력" />
+            <div className="landing-composer-input">
+              {startMode === 'respondent' && <ReceivedDocuments compact documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}
+              <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder={startMode === 'respondent' ? '예: 경찰에서 사기 혐의로 연락이 왔고, 다음 주 출석하라고 했어요.' : '예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요.'} rows={3} aria-label="사건 내용 입력" />
+            </div>
             <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '먼저 사건을 요약한 뒤, 사건 내용의 빈칸을 순서대로 하나씩 확인해요. 이름·주소 등 인적사항은 미리보기에서 직접 입력해도 됩니다.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
@@ -497,13 +500,15 @@ export default function App() {
       </div>
 
       {active?.messages.length ? <div className="composer-zone">
-        {currentMode === 'respondent' && <ReceivedDocuments documents={active.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('새로 첨부한 고소장 내용을 읽고 기존 대응 메모에 반영해줘.')} />}
         <div className="quick-prompts">
           <button onClick={() => setPrecedentOpen(true)}><BookOpen size={15} /> 판례 검색</button>
           <button onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={15} /> {currentMode === 'respondent' ? '대응 메모 보기' : '고소장 보기'}</button>
         </div>
         <div className="composer">
-          <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
+          <div className="composer-input-row">
+            {currentMode === 'respondent' && <ReceivedDocuments compact documents={active.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('새로 첨부한 고소장 내용을 읽고 기존 대응 메모에 반영해줘.')} />}
+            <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
+          </div>
           <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
         </div>
         <p className="composer-note">{active?.caseMode === 'respondent' ? '대화와 첨부 문서는 선택한 AI 제공자에게 전송됩니다. 개인정보를 가리고 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '대화와 고소장 초안은 답변을 위해 선택한 AI 제공자에게 전송됩니다. 제출 전 사실관계와 초안을 직접 확인해주세요.'}</p>
