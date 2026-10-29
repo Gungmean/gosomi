@@ -230,6 +230,12 @@ export default function App() {
       setActiveId(target.id)
     }
     const userMessage = makeMessage('user', pendingDocuments.length ? `${text}\n\n첨부 문서: ${pendingDocuments.map((item) => item.name).join(', ')}` : text)
+    const messagesForAi = [
+      ...target.messages.map((message) => message.id === followUpSubmission?.messageId
+        ? { ...message, followUpSubmitted: true, followUpAnswers: followUpSubmission.answers }
+        : message),
+      userMessage,
+    ]
     updateConversation(target.id, (conversation) => ({
       ...conversation,
       title: conversation.title === '새 대화' ? titleFrom(text) : conversation.title,
@@ -245,7 +251,7 @@ export default function App() {
     setBusy(true)
     try {
       const documentInput = pendingDocuments.length ? await prepareDocumentInput(pendingDocuments) : undefined
-      const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft, documentInput)
+      const result = await askAi(settings, messagesForAi, target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft, documentInput)
       const responseText = result.modelUsed
         ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
         : result.message
@@ -436,7 +442,7 @@ export default function App() {
           {startMode === 'respondent' && <ReceivedDocuments documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}
           <div className="landing-composer">
             <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder={startMode === 'respondent' ? '예: 경찰에서 사기 혐의로 연락이 왔고, 다음 주 출석하라고 했어요.' : '예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요.'} rows={3} aria-label="사건 내용 입력" />
-            <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
+            <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '먼저 사건을 요약한 뒤, 사건 내용의 빈칸을 순서대로 하나씩 확인해요. 이름·주소 등 인적사항은 미리보기에서 직접 입력해도 됩니다.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
             <button onClick={() => setPrecedentOpen(true)}><BookOpen size={16} /> 판례 먼저 찾아보기</button>

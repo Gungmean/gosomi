@@ -74,6 +74,7 @@ export default function FollowUpQuestions({
             {question.answerType === 'text'
               ? <textarea value={answer.text || ''} onChange={(event) => onAnswer(question.id, { ...answer, text: event.target.value })} placeholder={question.placeholder || '답변을 입력해 주세요'} rows={2} disabled={submitted || busy} />
               : <input value={answer.text || ''} onChange={(event) => onAnswer(question.id, { ...answer, text: event.target.value })} placeholder={question.placeholder || '추가 내용을 입력해 주세요 (선택)'} disabled={submitted || busy} />}
+            {question.answerType === 'text' && <button type="button" className="followup-skip" disabled={submitted || busy} onClick={() => onAnswer(question.id, { text: '모름 / 건너뛰기' })}>모르거나 지금 답하기 어려워요</button>}
           </label>}
         </div>
       })}

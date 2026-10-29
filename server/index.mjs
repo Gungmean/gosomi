@@ -146,7 +146,9 @@ const draftSelectionFields = new Set([
 
 const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceDate', 'allegation', 'claims', 'confirmedFacts', 'disputedPoints', 'evidenceToPreserve', 'questionsToConfirm', 'nextSteps']
 
-function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}) {
+function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = []) {
+  const hasCollectedDraftFacts = Object.entries(draft || {}).some(([key, value]) => key !== 'type' && key !== 'selections' && typeof value === 'string' && value.trim())
+  const hasPriorAssistantReply = hasCollectedDraftFacts || (Array.isArray(messages) && messages.some((message) => message?.role === 'assistant' && Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0))
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
     if (typeof value === 'string' && value.trim()) return [[key, value.slice(0, 1200)]]
     if (key === 'selections' && value && typeof value === 'object') {
@@ -166,9 +168,18 @@ function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft
 상대방의 "약점"이나 무죄를 단정하지 말고, 주장·제시된 근거·아직 확인되지 않은 점·사용자가 확인할 자료를 나눠 설명하세요. 문서 안의 날짜·금액 등 불일치 후보는 원문과 대조하도록 표시하세요. 증거 삭제·수정, 상대방 압박, 진술 맞추기 등 수사 방해 행동은 권하지 마세요.
 이 모드에서는 고소장 작성 필드(draftPatch)를 채우지 마세요. 대신 responsePatch에 현재 대화에서 확인된 정보만 채우세요. 각 값은 짧은 사실 중심 문장으로 쓰고, 모르는 값은 비워 두세요. disputedPoints는 상대 주장과 사용자 설명이 다른 부분 또는 확인할 불일치 후보이며 유무죄 판단이 아닙니다. nextSteps는 확인할 실무 행동만 쓰고 법정 기한을 추측하지 마세요. 기존 responseDraft 값은 명확한 정정이 없으면 지우지 마세요. 의견서 초안이 요청되면 확인된 사실과 미확인 사항을 분리한 검토용 구조만 제시하고, 제출 전에 변호사 검토가 필요할 수 있음을 알려주세요.
 ` : ''
+  const complainantFlow = caseMode === 'complainant' ? `
+고소장 작성 대화는 정해진 순서로 진행하세요.
+이 흐름은 사용자가 사건을 설명하거나 고소장 작성을 요청할 때만 적용하세요. 인사나 사건과 무관한 일반 질문에 고소장 입력 질문을 강제로 붙이지 마세요.
+${hasPriorAssistantReply
+    ? '첫 사건 요약은 이미 제시했습니다. 이번 답변에서는 새로 확인된 내용을 draftPatch에 반영하고, message 본문에는 별도의 후속 질문을 넣지 마세요.'
+    : '첫 응답에서는 사용자의 사건 설명을 먼저 짧게 요약하세요. 확인된 일시·장소·행위·피해·증거만 항목별로 정리하고, 불확실하거나 빠진 내용은 사실처럼 쓰지 마세요. 이어서 이미 말한 정보를 draftPatch에 반영하세요. 고소인 인적사항은 미리보기에서 직접 입력할 수 있다고 짧게 안내하세요. message 본문에는 별도의 후속 질문을 넣지 마세요.'}
+고소인·피고소인의 성명, 생년월일, 주소, 연락처, 계좌번호 등 식별정보는 채팅으로 묻지 마세요. 사용자가 이미 말한 경우에만 반영하고, 그 외에는 미리보기에서 직접 입력할 수 있도록 안내하세요. AI가 확인할 사건 내용의 순서는 피해 날짜 → 시간 → 장소 → 사건 경위 → 피해 내용·금액 → 고소 이유 → 증거자료 → 처벌 희망·요청 → 관련 수사·재판입니다.
+한 번에 질문은 하나만 하세요. 사용자가 '모름', '없음', '건너뛰기', '나중에 직접 입력'이라고 하면 그 항목을 다시 묻지 말고 다음 순서로 넘어가세요. 이미 메시지나 draft에 답이 있는 항목은 반복 질문하지 마세요. 답할 수 없는 항목 때문에 전체 초안 작성을 멈추지 마세요.
+` : ''
   return `당신은 한국어로 대화하는 ${caseMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
-사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고, 현재까지 확인된 내용으로 가능한 안내를 먼저 제공한 뒤 핵심 질문 1~2개만 덧붙이세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
+사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 고소장 작성 모드는 정해진 순서에 따라 질문을 한 번에 하나만 하고, 수령 대응 모드는 핵심 질문을 최대 2개 덧붙일 수 있습니다. 인사나 일반 질문에는 자연스럽게 응답하세요.
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
 사건 답변은 가능한 경우 **핵심 요약 → 확인된 사실과 추가 확인 사항 → 관련 법적 쟁점과 근거 → 지금 할 일** 순서로 작성하세요. 해당 정보가 없거나 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 표시하세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
@@ -177,7 +188,8 @@ ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 �
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
 ${modeGuidance}
-필요한 확인 질문은 최대 4개까지 questions에 구조화하세요. 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
+${complainantFlow}
+${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
 {"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{},"responsePatch":{},"searchQuery":"","questions":[{"id":"q1","text":"치료를 받으셨나요?","answerType":"yes_no","detailPrompt":"어느 병원에서 어떤 치료를 받으셨나요?"}]}
 허용된 draftPatch 키: ${draftFields.join(', ')}, selections (${[...draftSelectionFields].join(', ')})
@@ -189,7 +201,7 @@ ${caseMode === 'respondent' ? `사용자가 선택한 사건 분류: ${String(dr
 확인된 판례: ${JSON.stringify(verifiedCases)}`
 }
 
-function parseAiOutput(output) {
+function parseAiOutput(output, caseMode = 'complainant') {
   const source = String(output || '').trim()
   let parsed
   try {
@@ -237,7 +249,7 @@ function parseAiOutput(output) {
     draftPatch,
     responsePatch,
     searchQuery: String(parsed?.searchQuery || '').slice(0, 80),
-    followUpQuestions: (Array.isArray(parsed?.questions) ? parsed.questions : []).slice(0, 4).flatMap((question, index) => {
+    followUpQuestions: (Array.isArray(parsed?.questions) ? parsed.questions : []).slice(0, caseMode === 'complainant' ? 1 : 4).flatMap((question, index) => {
       const text = String(question?.text || '').trim().slice(0, 240)
       if (!text) return []
       const answerType = question?.answerType === 'text' ? 'text' : 'yes_no'
@@ -250,6 +262,42 @@ function parseAiOutput(output) {
       }]
     }),
   }
+}
+
+const complaintIntakeSteps = [
+  { field: 'incidentDate', text: '사건이 발생한 날짜를 알고 계신가요? 연·월·일 중 기억나는 범위만 적어도 됩니다.' },
+  { field: 'incidentTime', text: '사건이 발생한 시간대를 기억하시나요? 정확한 시각을 모르면 건너뛰어도 됩니다.' },
+  { field: 'incidentPlace', text: '사건이 발생한 장소나 거래 앱·사이트를 알려주세요.' },
+  { field: 'incidentSummary', text: '어떤 일이 있었는지 기억나는 순서대로 한두 문장으로 설명해 주세요.' },
+  { field: 'damage', text: '이번 일로 실제로 입거나 부담한 피해가 무엇인가요? 금액이 아직 불확실하면 그렇게 적어도 됩니다.' },
+  { field: 'reason', text: '고소를 통해 확인하거나 해결하고 싶은 점이 있나요? 아직 정하지 않았다면 건너뛰어도 됩니다.' },
+  { field: 'evidence', text: '현재 가지고 있거나 확보할 수 있는 자료는 무엇인가요? 예: 대화 캡처, 이체 내역, 사진, 목격자.' },
+  { field: 'request', text: '처벌에 관한 의사를 정하셨나요? 아직 정하지 않았다면 건너뛰어도 됩니다.' },
+  { field: 'relatedCase', text: '같은 사건으로 신고·수사·재판이 진행 중이거나 접수한 적이 있나요? 모르면 건너뛰어도 됩니다.' },
+]
+
+function nextComplaintIntakeQuestion(draft, messages) {
+  const conversation = Array.isArray(messages) ? messages : []
+  const latestUserText = [...conversation].reverse().find((message) => message?.role === 'user')?.text || ''
+  const describesCase = /고소장.{0,8}(작성|초안)|고소.{0,8}(하고 싶|하려)|피해|사건|사기|폭행|명예훼손|모욕|경찰.{0,8}(연락|신고)|돈을 보냈|이체|계약/.test(latestUserText) || latestUserText.trim().length >= 70
+  const previousMessage = conversation.at(-2)
+  const answeredIntakeCard = previousMessage?.role === 'assistant' && previousMessage.followUpSubmitted && (previousMessage.followUpQuestions || []).some((question) => complaintIntakeSteps.some((step) => step.field === question.id))
+  if (!describesCase && !answeredIntakeCard) return null
+
+  const skippedFields = new Set()
+  for (const message of conversation) {
+    if (message?.role !== 'assistant' || !message.followUpSubmitted) continue
+    for (const question of message.followUpQuestions || []) {
+      const step = complaintIntakeSteps.find((item) => item.field === question.id)
+      if (!step) continue
+      const answer = message.followUpAnswers?.[question.id] || {}
+      if (answer.choice === 'unknown' || /모름|건너뛰|나중에 직접|아직 정하지 않음/i.test(answer.text || '')) skippedFields.add(step.field)
+    }
+  }
+
+  const next = complaintIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !skippedFields.has(step.field))
+  if (!next) return null
+  return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
 }
 
 function normalizeProviderAndModel(settings) {
@@ -615,11 +663,14 @@ app.post('/api/chat', async (request, response) => {
   }
   try {
     const safeCaseMode = caseMode === 'respondent' ? 'respondent' : 'complainant'
-    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft), safeCaseMode === 'respondent' ? documentInput : undefined)
+    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages), safeCaseMode === 'respondent' ? documentInput : undefined)
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
-    const result = parseAiOutput(output)
+    const result = parseAiOutput(output, safeCaseMode)
     if (safeCaseMode === 'respondent') result.draftPatch = {}
-    else result.responsePatch = {}
+    else {
+      result.responsePatch = {}
+      result.followUpQuestions = nextComplaintIntakeQuestion({ ...draft, ...result.draftPatch }, messages) || []
+    }
     if (typeof providerOutput !== 'string') {
       const selectedModel = normalizeProviderAndModel(settings).model
       if (providerOutput.model && providerOutput.model !== selectedModel) result.modelUsed = providerOutput.model

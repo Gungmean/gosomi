@@ -190,6 +190,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .followup-detail input, .followup-detail textarea { width: 100%; min-height: 38px; resize: vertical; padding: 9px 11px; border: 1px solid #dfe8e0; border-radius: 9px; outline: 0; background: #fff; color: #29322b; font: inherit; font-size: 12px; line-height: 1.5; }
 .followup-detail input:focus, .followup-detail textarea:focus { border-color: #85ae8d; box-shadow: 0 0 0 3px #0066170e; }
 .followup-detail input::placeholder, .followup-detail textarea::placeholder { color: #a4ada5; }
+.followup-skip { justify-self: start; padding: 3px 0; border: 0; background: transparent; color: #758278; font-size: 10px; text-decoration: underline; text-underline-offset: 2px; }
+.followup-skip:hover:not(:disabled) { color: var(--green); }
+.followup-skip:disabled { cursor: default; opacity: .65; }
 .followup-submit { min-height: 34px; margin: 13px 0 0 27px; padding: 0 12px; border: 0; border-radius: 9px; display: inline-flex; align-items: center; gap: 6px; background: #006617; color: #fff; font-size: 11px; font-weight: 680; }
 .followup-submit:hover:not(:disabled) { background: #005813; }
 .followup-submit:disabled { background: #e2e9e3; color: #9da89f; cursor: not-allowed; }
