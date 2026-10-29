@@ -385,7 +385,7 @@ export default function App() {
         </div>)}
       </div>
       <div className="sidebar-footer">
-        <button className="sidebar-settings" onClick={() => setSettingsOpen(true)}><span className="sidebar-settings-icon"><KeyRound size={18} /></span><span><strong>API 연결 설정</strong><small>{settings.apiKey ? `${settings.provider} 연결 준비됨` : '내 API 키 입력하기'}</small></span><ArrowRight size={17} /></button>
+        <button className="sidebar-settings" onClick={() => setSettingsOpen(true)}><span className="sidebar-settings-icon"><KeyRound size={18} /></span><span><strong>API 연결 설정</strong><small>{settings.apiKey ? `${settings.provider} 키 입력됨 · 연결 확인 전` : '내 API 키 입력하기'}</small></span><ArrowRight size={17} /></button>
         <p>대화 기록은 이 브라우저에 저장됩니다.</p>
       </div>
     </aside>
