@@ -297,7 +297,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .official-value-multiline { overflow: hidden; white-space: pre-wrap; overflow-wrap: anywhere; }
 .official-source { margin: 0 2px 9px; color: #909990; font-size: 9px; line-height: 1.5; }
 .official-source a { color: #617b66; text-decoration: underline; text-underline-offset: 2px; }
-.official-attachment { aspect-ratio: 1819 / 2570; min-height: 0; padding: 8% 7%; }
+.official-attachment { min-height: 750px; padding: 8% 7%; }
 .official-attachment h1 { margin: 0 0 14px; color: #111; text-align: center; font-size: 18px; font-weight: 730; }
 .official-attachment .document-row-tall { min-height: 90px; break-inside: avoid; page-break-inside: avoid; }
 .official-attachment .document-row-content { align-items: flex-start; white-space: pre-wrap; }
