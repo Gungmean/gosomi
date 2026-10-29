@@ -350,12 +350,14 @@ function extractGeminiInteractionsText(data) {
   return ''
 }
 
-async function fetchWithRetry(url, options, maxAttempts = 3) {
+async function fetchWithRetry(url, options, maxAttempts = 3, requestSignal) {
   let response
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     response = await fetch(url, {
       ...options,
-      signal: AbortSignal.timeout(45000),
+      signal: requestSignal
+        ? AbortSignal.any([requestSignal, AbortSignal.timeout(20000)])
+        : AbortSignal.timeout(20000),
     })
     if (![500, 502, 503, 504].includes(response.status) || attempt === maxAttempts - 1) break
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 450 * (attempt + 1)))
@@ -400,7 +402,7 @@ function throwProviderHttpError(provider, apiKey, response, data) {
   throw new Error(`AI 제공자 요청에 실패했습니다. (${response.status}${providerDetail ? `: ${providerDetail}` : ''})`)
 }
 
-async function callGeminiSingleModel(model, apiKey, userPromptText, prompt, images = []) {
+async function callGeminiSingleModel(model, apiKey, userPromptText, prompt, images = [], requestSignal) {
   const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
   const supportsThinkingLevel = /^gemini-(?:2\.5|3|4)/.test(model)
   const thinkingLevel = model.includes('lite') ? 'minimal' : 'low'
@@ -420,7 +422,7 @@ async function callGeminiSingleModel(model, apiKey, userPromptText, prompt, imag
     method: 'POST',
     headers,
     body: JSON.stringify(makeGenerateBody(supportsThinkingLevel)),
-  }, 2)
+  }, 2, requestSignal)
   let data = await response.json().catch(() => ({}))
 
   if (!response.ok && response.status === 400 && supportsThinkingLevel) {
@@ -430,7 +432,7 @@ async function callGeminiSingleModel(model, apiKey, userPromptText, prompt, imag
         method: 'POST',
         headers,
         body: JSON.stringify(makeGenerateBody(false)),
-      }, 2)
+      }, 2, requestSignal)
       data = await response.json().catch(() => ({}))
     }
   }
@@ -438,7 +440,7 @@ async function callGeminiSingleModel(model, apiKey, userPromptText, prompt, imag
   return { response, data }
 }
 
-async function callGemini(model, apiKey, conversation, prompt, images = []) {
+async function callGemini(model, apiKey, conversation, prompt, images = [], requestSignal) {
   const headers = { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' }
   const userPromptText = conversation.length <= 1
     ? (conversation[0]?.content || '안녕하세요.')
@@ -457,7 +459,7 @@ async function callGemini(model, apiKey, conversation, prompt, images = []) {
 
   for (let i = 0; i < candidateModels.length; i += 1) {
     const candidate = candidateModels[i]
-    const { response, data } = await callGeminiSingleModel(candidate, apiKey, userPromptText, prompt, images)
+    const { response, data } = await callGeminiSingleModel(candidate, apiKey, userPromptText, prompt, images, requestSignal)
     if (!lastResponse || response.status !== 404) {
       lastResponse = response
       lastData = data
@@ -508,7 +510,7 @@ async function callGemini(model, apiKey, conversation, prompt, images = []) {
       method: 'POST',
       headers,
       body: JSON.stringify(interactionsBody),
-    }, 1)
+    }, 1, requestSignal)
     const intData = await intResponse.json().catch(() => ({}))
     if (intResponse.ok) {
       const intText = extractGeminiInteractionsText(intData)
@@ -557,8 +559,9 @@ async function callProvider(settings, messages, prompt, documentInput = {}) {
   if (documentText) conversation[conversation.length - 1].content += `\n\n[첨부 문서에서 추출한 글자]\n${documentText}`
   if (images.length) conversation[conversation.length - 1].content += `\n\n[첨부 이미지 순서]\n${images.map((image, index) => `${index + 1}. ${String(image.name || '페이지').slice(0, 120)}`).join('\n')}`
 
+  const requestSignal = AbortSignal.timeout(50000)
   if (provider === 'gemini') {
-    return callGemini(model, apiKey, conversation, prompt, images)
+    return callGemini(model, apiKey, conversation, prompt, images, requestSignal)
   }
 
   let url
@@ -586,7 +589,7 @@ async function callProvider(settings, messages, prompt, documentInput = {}) {
     method: 'POST',
     headers,
     body: JSON.stringify(body),
-  }, 1)
+  }, 1, requestSignal)
   const data = await response.json().catch(() => ({}))
   if (!response.ok) {
     throwProviderHttpError(provider, apiKey, response, data)

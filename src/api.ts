@@ -17,11 +17,20 @@ export async function askAi(
   responseDraft?: ResponseDraft,
   documentInput?: DocumentInput,
 ): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; responsePatch?: Partial<ResponseDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string }> {
-  const response = await fetch('/api/chat', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ settings, messages, draft, precedents, caseMode, responseDraft, documentInput }),
-  })
+  let response: Response
+  try {
+    response = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings, messages, draft, precedents, caseMode, responseDraft, documentInput }),
+      signal: AbortSignal.timeout(55000),
+    })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'TimeoutError') {
+      throw new Error('AI 응답이 55초 안에 도착하지 않았습니다. 연결 상태를 확인한 뒤 다시 시도해주세요.')
+    }
+    throw error
+  }
   return readJson(response)
 }
 
