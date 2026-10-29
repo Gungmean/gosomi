@@ -10,6 +10,23 @@ const officialPages: Record<Exclude<ComplaintType, 'general'>, [string, string]>
   assault: ['/forms/official/print-08.png', '/forms/official/print-09.png'],
 }
 
+function needsSupplementalPage(draft: ComplaintDraft) {
+  if (draft.type === 'general') return false
+  if (draft.type === 'assault') return Boolean(draft.incidentSummary || draft.damage || draft.evidence || draft.reason || draft.request || draft.relatedCase)
+  const singleLineFields = [
+    [draft.complainantName, 12], [draft.complainantAddress, 34], [draft.complainantPhone, 20],
+    [draft.accusedName, 12], [draft.accusedAddress, 34], [draft.accusedPhone, 20],
+    [draft.accusedOnlineId, 28], [draft.accusedAccount, 32], [draft.incidentDate, 20],
+    [draft.incidentTime, 18], [draft.incidentPlace, 34],
+  ]
+  return Boolean(
+    draft.reason || draft.evidence || draft.request || draft.relatedCase ||
+    singleLineFields.some(([value, limit]) => String(value).length > Number(limit)) ||
+    (draft.incidentSummary && draft.incidentSummary.length > (draft.type === 'fraud' ? 90 : 150)) ||
+    (draft.damage && draft.damage.length > 35),
+  )
+}
+
 type Position = { left: string; top: string; width?: string; height?: string; size?: string }
 type OverlayField = { field: string; value: string; position: Position; multiline?: boolean }
 
@@ -31,7 +48,8 @@ function OfficialPage({
       key={field}
       className={`official-value${multiline ? ' official-value-multiline' : ''}`}
       style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size }}
-      title={`${field} 내용 수정`}
+      title={`${field} 내용 수정: ${value}`}
+      aria-label={`${field} 내용 수정: ${value}`}
       onClick={() => onFieldClick(field)}
     ><TypedDocumentText text={value} animateKey={animatedFields?.[field]} /></button>)}
   </div>
@@ -138,6 +156,26 @@ function OfficialComplaint({
   const makeFields = (mapping: Record<string, Position>) => Object.entries(mapping)
     .filter(([field]) => values[field])
     .map(([field, position]) => ({ field, value: values[field], position, multiline: field === 'incidentSummary' || field === 'evidence' }))
+
+  const needsAttachment = needsSupplementalPage(draft)
+  const attachmentRows = [
+    { key: 'complainantName', label: '고소인 성명', value: draft.complainantName, animateKey: animatedFields?.complainantName },
+    { key: 'complainantAddress', label: '고소인 주소', value: draft.complainantAddress, animateKey: animatedFields?.complainantAddress },
+    { key: 'complainantPhone', label: '고소인 연락처', value: draft.complainantPhone, animateKey: animatedFields?.complainantPhone },
+    { key: 'accusedName', label: '피고소인 성명', value: draft.accusedName, animateKey: animatedFields?.accusedName },
+    { key: 'accusedAddress', label: '피고소인 주소', value: draft.accusedAddress, animateKey: animatedFields?.accusedAddress },
+    { key: 'accusedPhone', label: '피고소인 연락처', value: draft.accusedPhone, animateKey: animatedFields?.accusedPhone },
+    { key: 'accusedOnlineId', label: '피고소인 ID·닉네임', value: draft.accusedOnlineId, animateKey: animatedFields?.accusedOnlineId },
+    { key: 'accusedAccount', label: '피고소인 계좌번호', value: draft.accusedAccount, animateKey: animatedFields?.accusedAccount },
+    { key: 'incidentDate', label: '피해 일시', value: `${draft.incidentDate} ${draft.incidentTime}`.trim(), animateKey: animatedFields?.incidentDate || animatedFields?.incidentTime },
+    { key: 'incidentPlace', label: '피해 장소', value: draft.incidentPlace, animateKey: animatedFields?.incidentPlace },
+    { key: 'incidentSummary', label: '사건 경위', value: draft.incidentSummary, animateKey: animatedFields?.incidentSummary },
+    { key: 'damage', label: '피해·손해', value: draft.damage, animateKey: animatedFields?.damage },
+    { key: 'evidence', label: '증거자료', value: draft.evidence, animateKey: animatedFields?.evidence },
+    { key: 'reason', label: '고소 이유', value: draft.reason, animateKey: animatedFields?.reason },
+    { key: 'request', label: '처벌 희망·요청', value: draft.request, animateKey: animatedFields?.request },
+    { key: 'relatedCase', label: '관련 사건', value: draft.relatedCase, animateKey: animatedFields?.relatedCase },
+  ]
 
   const firstMarks: Position[] = []
   const secondMarks: Position[] = []
@@ -254,19 +292,14 @@ function OfficialComplaint({
   }
 
   return <div className="document-print-root official-document" aria-label={`${templateLabels[type]} 경찰청 간이 고소장 미리보기`}>
-    <div className="official-form-note">경찰청 원본 서식 · 입력한 내용은 빈칸에 표시됩니다 · 주민등록번호 등 민감한 정보는 출력 후 직접 작성하세요</div>
+    <div className="official-form-note">경찰청 원본 서식 · 입력한 내용은 빈칸에 표시됩니다 · 주민등록번호 등 민감한 정보는 출력 후 직접 작성하세요{needsSupplementalPage(draft) ? ' · 별지 포함' : ''}</div>
     <OfficialPage src={officialPages[type][0]} pageNumber={1} fields={makeFields(firstPositions)} marks={firstMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
     <OfficialPage src={officialPages[type][1]} pageNumber={2} fields={makeFields(second)} marks={secondMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
-    {type === 'assault' && (draft.incidentSummary || draft.damage || draft.evidence || draft.reason) && <article className="paper official-attachment">
+    {needsAttachment && <article className="paper official-attachment">
       <h1>별지 · 사건 경위 및 추가 내용</h1>
-      <p className="document-note">경찰청 폭행 간이 고소장 원본에는 자유 서술란이 없어, 아래 내용은 별지 초안으로 정리했습니다.</p>
+      <p className="document-note">원본 양식에 들어가지 않거나 칸을 넘는 내용은 빠짐없이 별지에 정리했습니다. 제출 전 사실과 표현을 확인해주세요.</p>
       <div className="document-table">
-        <Row label="피해 일시" value={`${draft.incidentDate} ${draft.incidentTime}`.trim()} animateKey={animatedFields?.incidentDate || animatedFields?.incidentTime} onClick={() => onFieldClick('incidentDate')} />
-        <Row label="피해 장소" value={draft.incidentPlace} animateKey={animatedFields?.incidentPlace} onClick={() => onFieldClick('incidentPlace')} />
-        <Row label="사건 경위" value={draft.incidentSummary} animateKey={animatedFields?.incidentSummary} onClick={() => onFieldClick('incidentSummary')} />
-        <Row label="피해·손해" value={draft.damage} animateKey={animatedFields?.damage} onClick={() => onFieldClick('damage')} />
-        <Row label="증거자료" value={draft.evidence} animateKey={animatedFields?.evidence} onClick={() => onFieldClick('evidence')} />
-        <Row label="추가 고소 이유" value={draft.reason} animateKey={animatedFields?.reason} onClick={() => onFieldClick('reason')} />
+        {attachmentRows.filter(({ value }) => value).map(({ key, label, value, animateKey }) => <Row key={key} label={label} value={value} animateKey={animateKey} tall={['complainantAddress', 'accusedAddress', 'incidentSummary', 'evidence', 'reason', 'request', 'relatedCase'].includes(key)} onClick={() => onFieldClick(key)} />)}
       </div>
       <div className="document-signature"><span>고소인: <Value value={draft.complainantName} animateKey={animatedFields?.complainantName} /> (인)</span></div>
     </article>}
@@ -280,8 +313,8 @@ function Value({ value, placeholder = '미작성', multiline = false, animateKey
   </span>
 }
 
-function Row({ label, value, onClick, placeholder, animateKey }: { label: string; value: string; onClick: () => void; placeholder?: string; animateKey?: string }) {
-  return <div className="document-row" onClick={onClick} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onClick()}>
+function Row({ label, value, onClick, placeholder, animateKey, tall = false }: { label: string; value: string; onClick: () => void; placeholder?: string; animateKey?: string; tall?: boolean }) {
+  return <div className={`document-row${tall ? ' document-row-tall' : ''}`} onClick={onClick} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onClick()}>
     <div className="document-row-label">{label}</div><div className="document-row-content"><Value value={value} placeholder={placeholder} animateKey={animateKey} /></div>
   </div>
 }
