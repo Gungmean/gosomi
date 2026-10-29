@@ -9,12 +9,14 @@ import {
 import { askAi, searchPrecedents } from './api'
 import ComplaintPanel from './components/ComplaintPanel'
 import ResponsePanel from './components/ResponsePanel'
+import ReceivedDocuments from './components/ReceivedDocuments'
 import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
 import SettingsDialog from './components/SettingsDialog'
 import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
 import { isValidApiKeyFormat, loadConversations, loadSettings, saveConversations, saveSettings } from './storage'
-import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent, ResponseDraft } from './types'
+import { deleteDocumentFile, getDocumentPageCount, isSupportedDocument, MAX_DOCUMENT_PAGES, prepareDocumentInput, saveDocumentFile } from './documentStore'
+import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent, ReceivedDocument, ResponseDraft } from './types'
 import { blankDraft, blankResponseDraft, createConversation } from './types'
 
 function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
@@ -33,21 +35,26 @@ function titleFrom(text: string) {
   return cleaned.length > 25 ? `${cleaned.slice(0, 25)}…` : cleaned || '새 대화'
 }
 
+function findRestorableConversation() {
+  return loadConversations().find((conversation) => conversation.messages.length > 0 || Boolean(conversation.receivedDocuments?.length))
+}
+
 export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
-  const [activeId, setActiveId] = useState<string | null>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.id || null)
+  const [activeId, setActiveId] = useState<string | null>(() => findRestorableConversation()?.id || null)
   const [settings, setSettings] = useState<AiSettings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [precedentOpen, setPrecedentOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [input, setInput] = useState('')
-  const [startType, setStartType] = useState<ComplaintType>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.draft?.type || 'general')
-  const [startMode, setStartMode] = useState<CaseMode>(() => loadConversations().find((conversation) => conversation.messages.length > 0)?.caseMode || 'complainant')
+  const [startType, setStartType] = useState<ComplaintType>(() => findRestorableConversation()?.draft?.type || 'general')
+  const [startMode, setStartMode] = useState<CaseMode>(() => findRestorableConversation()?.caseMode || 'complainant')
   const [busy, setBusy] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState('')
   const [typingMessageId, setTypingMessageId] = useState<string | null>(() => {
-    const initialConv = loadConversations().find((conversation) => conversation.messages.length > 0)
+    const initialConv = findRestorableConversation()
     const lastAssistant = initialConv ? [...initialConv.messages].reverse().find((m) => m.role === 'assistant') : undefined
     return lastAssistant?.id || null
   })
@@ -157,12 +164,44 @@ export default function App() {
     updateConversation(target.id, (conversation) => ({ ...conversation, precedents: results, updatedAt: Date.now() }))
   }
 
+  async function addReceivedDocuments(files: File[]) {
+    if (!files.length || uploading) return
+    const target = ensureConversation(startType, 'respondent')
+    const existing = target.receivedDocuments || []
+    let pageTotal = existing.reduce((sum, item) => sum + item.pageCount, 0)
+    const added: ReceivedDocument[] = []
+    setUploading(true)
+    try {
+      for (const file of files) {
+        if (!isSupportedDocument(file)) throw new Error('PDF, JPG, PNG, WebP 파일만 첨부할 수 있습니다.')
+        if (file.size > 20 * 1024 * 1024) throw new Error(`${file.name}: 파일 크기는 20MB 이하여야 합니다.`)
+        const pageCount = await getDocumentPageCount(file)
+        if (pageTotal + pageCount > MAX_DOCUMENT_PAGES) throw new Error(`한 대화에서 최대 ${MAX_DOCUMENT_PAGES}쪽까지 첨부할 수 있습니다.`)
+        const document: ReceivedDocument = { id: crypto.randomUUID(), name: file.name, mimeType: /\.pdf$/i.test(file.name) ? 'application/pdf' : file.type || 'image/jpeg', size: file.size, pageCount, analyzed: false, createdAt: Date.now() }
+        await saveDocumentFile(document.id, file)
+        added.push(document)
+        pageTotal += pageCount
+      }
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : '파일을 첨부하지 못했습니다.')
+    } finally {
+      if (added.length) updateConversation(target.id, (conversation) => ({ ...conversation, receivedDocuments: [...(conversation.receivedDocuments || []), ...added], updatedAt: Date.now() }))
+      setUploading(false)
+    }
+  }
+
+  function removeReceivedDocument(document: ReceivedDocument) {
+    if (!activeId) return
+    updateConversation(activeId, (conversation) => ({ ...conversation, receivedDocuments: (conversation.receivedDocuments || []).filter((item) => item.id !== document.id), updatedAt: Date.now() }))
+    void deleteDocumentFile(document.id)
+  }
+
   async function handleSend(
     messageText?: string,
     followUpSubmission?: { messageId: string; answers: Record<string, FollowUpAnswer> },
   ) {
     const text = (messageText ?? input).trim()
-    if (!text || busy) return
+    if (!text || busy || uploading) return
     const cleanApiKey = settings.apiKey.replace(/\s+/g, '')
     if (!cleanApiKey) {
       setSettingsOpen(true)
@@ -176,11 +215,12 @@ export default function App() {
       return
     }
     const target = active || createConversation(startType, startMode)
+    const pendingDocuments = target.caseMode === 'respondent' ? (target.receivedDocuments || []).filter((item) => !item.analyzed) : []
     if (!active) {
       setConversations((current) => [target, ...current])
       setActiveId(target.id)
     }
-    const userMessage = makeMessage('user', text)
+    const userMessage = makeMessage('user', pendingDocuments.length ? `${text}\n\n첨부 문서: ${pendingDocuments.map((item) => item.name).join(', ')}` : text)
     updateConversation(target.id, (conversation) => ({
       ...conversation,
       title: conversation.title === '새 대화' ? titleFrom(text) : conversation.title,
@@ -195,7 +235,8 @@ export default function App() {
     setInput('')
     setBusy(true)
     try {
-      const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft)
+      const documentInput = pendingDocuments.length ? await prepareDocumentInput(pendingDocuments) : undefined
+      const result = await askAi(settings, [...target.messages, userMessage], target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft, documentInput)
       const responseText = result.modelUsed
         ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
         : result.message
@@ -224,6 +265,7 @@ export default function App() {
         messages: [...conversation.messages, assistantMessage],
         draft: { ...conversation.draft, ...result.draftPatch },
         responseDraft: { ...blankResponseDraft(), ...conversation.responseDraft, ...result.responsePatch },
+        receivedDocuments: (conversation.receivedDocuments || []).map((item) => pendingDocuments.some((pending) => pending.id === item.id) ? { ...item, analyzed: true } : item),
         updatedAt: Date.now(),
       }))
       if ((!active || activeId === target.id) && target.caseMode !== 'respondent' && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
@@ -285,6 +327,7 @@ export default function App() {
     const target = conversations.find((conversation) => conversation.id === id)
     if (!window.confirm(`이 대화와 ${target?.caseMode === 'respondent' ? '대응 메모' : '고소장 초안'}를 삭제할까요? 이 브라우저에서 복구할 수 없습니다.`)) return
     setConversations((current) => current.filter((item) => item.id !== id))
+    for (const document of target?.receivedDocuments || []) void deleteDocumentFile(document.id)
     if (activeId === id) setActiveId(null)
   }
 
@@ -381,9 +424,10 @@ export default function App() {
               ] as [ComplaintType, string][]).map(([type, label]) => <button key={type} className={startType === type ? 'selected' : ''} onClick={() => selectComplaintType(type)} aria-pressed={startType === type}>{label}</button>)}
             </div>
           </div>
+          {startMode === 'respondent' && <ReceivedDocuments documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}
           <div className="landing-composer">
             <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder={startMode === 'respondent' ? '예: 경찰에서 사기 혐의로 연락이 왔고, 다음 주 출석하라고 했어요.' : '예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요.'} rows={3} aria-label="사건 내용 입력" />
-            <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
+            <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '상대방 이름이나 연락처는 꼭 필요한 경우에만 적어주세요.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
           </div>
           <div className="welcome-tools">
             <button onClick={() => setPrecedentOpen(true)}><BookOpen size={16} /> 판례 먼저 찾아보기</button>
@@ -431,13 +475,14 @@ export default function App() {
       </div>
 
       {active?.messages.length ? <div className="composer-zone">
+        {currentMode === 'respondent' && <ReceivedDocuments documents={active.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('새로 첨부한 고소장 내용을 읽고 기존 대응 메모에 반영해줘.')} />}
         <div className="quick-prompts">
           <button onClick={() => setPrecedentOpen(true)}><BookOpen size={15} /> 판례 검색</button>
           <button onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={15} /> {currentMode === 'respondent' ? '대응 메모 보기' : '고소장 보기'}</button>
         </div>
         <div className="composer">
           <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
-          <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy} onClick={() => handleSend()}><Send size={18} /></button></div>
+          <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
         </div>
         <p className="composer-note">{active?.caseMode === 'respondent' ? '고소장 내용은 개인정보를 가리고 필요한 부분만 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '작성된 사실관계와 초안은 제출 전에 직접 확인해주세요.'}</p>
       </div> : null}

@@ -222,6 +222,33 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .send-button:disabled { background: #dce4de; color: #aeb9af; }
 .composer-note { max-width: 780px; margin: 10px auto 0; display: flex; align-items: center; justify-content: center; gap: 5px; color: #a3aca4; font-size: 10px; line-height: 1.45; text-align: center; }
 
+/* Received complaint files */
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+.received-documents { width: 100%; max-width: 780px; margin: 0 auto 14px; padding: 13px 15px; border: 1px solid #e0e9e1; border-radius: 11px; background: #fafcfb; }
+.received-documents-heading { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 9px; }
+.received-documents-heading strong { color: #304835; font-size: 12px; font-weight: 710; }
+.received-documents-heading span { color: #8a978d; font-size: 10px; }
+.document-add-button, .document-analyze-button { min-height: 35px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #c8ddcd; border-radius: 8px; background: #fff; color: var(--green); font-size: 11px; font-weight: 690; }
+.document-add-button:hover:not(:disabled) { background: #f0f7f1; }
+.document-analyze-button { margin-top: 9px; border-color: var(--green); background: var(--green); color: #fff; }
+.document-analyze-button:hover:not(:disabled) { background: var(--green-hover); }
+.document-add-button:disabled, .document-analyze-button:disabled { opacity: .55; }
+.received-document-list { max-height: 120px; overflow-y: auto; margin-top: 9px; display: grid; gap: 5px; }
+.received-document-item { display: flex; align-items: center; min-width: 0; border: 1px solid #e7ece8; border-radius: 8px; background: #fff; }
+.received-document-open { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; padding: 7px 9px; border: 0; background: transparent; text-align: left; color: var(--green); }
+.received-document-open span { display: grid; gap: 1px; min-width: 0; }
+.received-document-open strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #344437; font-size: 11px; font-weight: 650; }
+.received-document-open small { color: #89958b; font-size: 10px; }
+.received-document-remove { width: 34px; height: 34px; flex: 0 0 34px; border: 0; background: transparent; color: #9da9a0; }
+.received-document-remove:hover { color: #b2443b; }
+.document-upload-note { margin: 9px 0 0; color: #87938a; font-size: 10px; line-height: 1.45; }
+.document-preview-dialog { width: min(900px, calc(100vw - 24px)); height: min(90vh, 900px); display: flex; flex-direction: column; padding: 18px; overflow: hidden; }
+.document-preview-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.document-preview-head h2 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin: 0; font-size: 15px; }
+.document-preview-description { margin: 3px 0 12px !important; font-size: 11px !important; }
+.document-preview-dialog iframe, .document-preview-dialog img { width: 100%; flex: 1; min-height: 0; border: 0; object-fit: contain; background: #f3f5f3; }
+.document-preview-loading { flex: 1; display: grid; place-items: center; color: #778477; font-size: 12px; }
+
 /* Edge panel */
 .edge-handle { position: fixed; right: 0; top: 46%; z-index: 12; width: 48px; height: 116px; border: 1px solid #b8d8bf; border-right: 0; border-radius: 13px 0 0 13px; background: #fff; color: var(--green); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; box-shadow: -5px 4px 20px #133b1b14; touch-action: pan-y; transition: width .17s, box-shadow .17s; }
 .edge-handle:hover { width: 53px; box-shadow: -8px 5px 23px #133b1b21; }
@@ -265,7 +292,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .official-page { position: relative; width: 100%; aspect-ratio: 1819 / 2570; margin: 0 auto 16px; overflow: hidden; background: #fff; box-shadow: 0 8px 35px #1c2f1d18; }
 .official-page-image { position: absolute; inset: 0; display: block; width: 100%; height: 100%; object-fit: fill; }
 .official-checkmark { position: absolute; z-index: 2; display: grid; place-items: center; color: #111; font-family: Arial, sans-serif; font-size: clamp(10px, 1.3vw, 17px); font-weight: 800; line-height: 1; pointer-events: none; }
-.official-value { position: absolute; z-index: 1; display: block; overflow: hidden; min-width: 0; padding: 1px 2px; border: 0; border-radius: 1px; background: #ffffffbd; color: #172019; text-align: left; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; font-family: 'Pretendard', sans-serif; font-size: 11px; font-weight: 500; line-height: 1.25; cursor: pointer; }
+.official-value { position: absolute; z-index: 1; display: block; overflow: hidden; min-width: 0; padding: 1px 2px; border: 0; border-radius: 1px; background: #ffffffbd; color: #172019; text-align: left; vertical-align: top; white-space: pre-wrap; overflow-wrap: anywhere; font-family: 'Malgun Gothic', '맑은 고딕', 'Pretendard', sans-serif; font-size: 11px; font-weight: 400; line-height: 1.25; cursor: pointer; }
 .official-value:hover, .official-value:focus-visible { outline: 1px solid #006617; background: #ffffffed; }
 .official-value-multiline { overflow: hidden; }
 .official-source { margin: 0 2px 9px; color: #909990; font-size: 9px; line-height: 1.5; }
@@ -274,7 +301,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .official-attachment h1 { margin: 0 0 14px; color: #111; text-align: center; font-size: 18px; font-weight: 730; }
 .official-attachment .document-row:nth-child(3), .official-attachment .document-row:nth-child(4), .official-attachment .document-row:nth-child(5), .official-attachment .document-row:nth-child(6) { min-height: 90px; }
 .official-attachment .document-row-content { align-items: flex-start; white-space: pre-wrap; }
-.paper { width: 100%; min-height: 750px; margin: 0 auto; padding: 34px 35px 30px; background: #fff; box-shadow: 0 8px 35px #1c2f1d18; color: #111; font-family: 'Pretendard', sans-serif; font-size: 11px; line-height: 1.55; }
+.paper { width: 100%; min-height: 750px; margin: 0 auto; padding: 34px 35px 30px; background: #fff; box-shadow: 0 8px 35px #1c2f1d18; color: #111; font-family: 'Malgun Gothic', '맑은 고딕', 'Pretendard', sans-serif; font-size: 11px; line-height: 1.55; }
 .paper-head { position: relative; padding: 0 0 18px; text-align: center; }
 .paper-head h1 { margin: 11px 0 0; font-size: 23px; letter-spacing: .08em; font-weight: 720; }
 .paper-subtitle { margin: 8px 0 0; color: #303630; font-size: 13px; font-weight: 620; }

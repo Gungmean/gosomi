@@ -51,6 +51,7 @@ export function loadConversations(): Conversation[] {
       draft: { ...blankDraft(), ...item.draft, selections: { ...(item.draft?.selections || {}) } },
       caseMode: item.caseMode === 'respondent' ? 'respondent' : 'complainant',
       responseDraft: { ...blankResponseDraft(), ...item.responseDraft },
+      receivedDocuments: Array.isArray(item.receivedDocuments) ? item.receivedDocuments : [],
       precedents: Array.isArray(item.precedents) ? item.precedents : [],
     }))
   } catch {

@@ -74,6 +74,27 @@ export interface Precedent {
   url: string
 }
 
+export interface ReceivedDocument {
+  id: string
+  name: string
+  mimeType: string
+  size: number
+  pageCount: number
+  analyzed: boolean
+  createdAt: number
+}
+
+export interface DocumentImage {
+  name: string
+  mimeType: 'image/jpeg'
+  data: string
+}
+
+export interface DocumentInput {
+  text: string
+  images: DocumentImage[]
+}
+
 export interface Conversation {
   id: string
   title: string
@@ -84,6 +105,7 @@ export interface Conversation {
   precedents: Precedent[]
   caseMode?: CaseMode
   responseDraft?: ResponseDraft
+  receivedDocuments?: ReceivedDocument[]
 }
 
 export interface AiSettings {
@@ -157,5 +179,6 @@ export const createConversation = (type: ComplaintType = 'general', caseMode: Ca
     precedents: [],
     caseMode,
     responseDraft: blankResponseDraft(),
+    receivedDocuments: [],
   }
 }
