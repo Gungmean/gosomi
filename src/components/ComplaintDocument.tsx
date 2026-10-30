@@ -14,9 +14,36 @@ function fraudAmountForForm(damage: string) {
   return damage.match(/(\d[\d,]*(?:\.\d+)?\s*(?:억|천만|백만|십만|만|천|백)?)(?=\s*원)/u)?.[1].replace(/\s+/g, '') || ''
 }
 
+function formDateParts(value: string) {
+  const full = value.match(/(\d{4})\s*(?:년|[./-])\s*(\d{1,2})\s*(?:월|[./-])\s*(\d{1,2})/u)
+  const partial = full ? null : value.match(/(\d{1,2})\s*월\s*(\d{1,2})\s*일/u)
+  const year = full?.[1] || ''
+  const month = Number(full?.[2] || partial?.[1])
+  const day = Number(full?.[3] || partial?.[2])
+  if (!month || month > 12 || !day || day > 31) return { year: '', month: '', day: '' }
+  return { year, month: String(month), day: String(day) }
+}
+
+function formTimeParts(value: string) {
+  const clock = value.match(/(\d{1,2}):(\d{2})/u)
+  const spoken = clock ? null : value.match(/(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분)?/u)
+  if (!clock && !spoken) return { hour: '', minute: '' }
+  let hour = Number(clock?.[1] || spoken?.[1])
+  const minute = clock?.[2] || spoken?.[2] || ''
+  if (!clock && /오후|저녁|밤/u.test(value) && hour < 12) hour += 12
+  if (!clock && /오전|아침|새벽/u.test(value) && hour === 12) hour = 0
+  if (!Number.isFinite(hour) || hour > 23 || (minute && Number(minute) > 59)) return { hour: '', minute: '' }
+  return { hour: String(hour).padStart(2, '0'), minute: minute ? minute.padStart(2, '0') : '' }
+}
+
 function needsSupplementalPage(draft: ComplaintDraft) {
   if (draft.type === 'general') return false
-  if (draft.type === 'assault') return Boolean(draft.incidentSummary || draft.damage || draft.evidence || draft.reason || draft.request || draft.relatedCase)
+  const dateTimeNeedsNote = Boolean(
+    (draft.incidentDate && !formDateParts(draft.incidentDate).month) ||
+    (draft.incidentTime && !formTimeParts(draft.incidentTime).hour) ||
+    /경|쯤|무렵|대략|약/u.test(`${draft.incidentDate} ${draft.incidentTime}`),
+  )
+  if (draft.type === 'assault') return Boolean(dateTimeNeedsNote || draft.incidentSummary || draft.damage || draft.evidence || draft.reason || draft.request || draft.relatedCase)
   const singleLineFields = [
     [draft.complainantName, 12], [draft.complainantAddress, 34], [draft.complainantPhone, 20],
     [draft.accusedName, 12], [draft.accusedAddress, 34], [draft.accusedPhone, 20],
@@ -25,6 +52,7 @@ function needsSupplementalPage(draft: ComplaintDraft) {
   ]
   return Boolean(
     draft.reason || draft.evidence || draft.request || draft.relatedCase ||
+    dateTimeNeedsNote ||
     (draft.type === 'fraud' && draft.damage && !fraudAmountForForm(draft.damage) && !/모름|알 수 없|불명/u.test(draft.damage)) ||
     /예금주|명의자/u.test(draft.accusedAccount) ||
     singleLineFields.some(([value, limit]) => String(value).length > Number(limit)) ||
@@ -51,7 +79,7 @@ function OfficialPage({
     {marks.map((position, index) => <span key={`mark-${index}`} className="official-checkmark" style={{ left: position.left, top: position.top, width: position.width, height: position.height }} aria-hidden="true">✓</span>)}
     {fields.filter(({ value }) => value.trim()).map(({ field, value, position, multiline }) => <button
       type="button"
-      key={field}
+      key={`${field}-${position.left}-${position.top}`}
       className={`official-value${multiline ? ' official-value-multiline' : ''}`}
       style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size, backgroundColor: field === 'accusedBank' ? '#fff' : undefined }}
       title={`${field} 내용 수정: ${value}`}
@@ -83,8 +111,6 @@ function OfficialComplaint({
         accusedOnlineId: { left: '47%', top: '53.1%', width: '40%' },
         accusedBank: { left: '23.5%', top: '56.7%', width: '19%' },
         accusedAccount: { left: '59%', top: '56.7%', width: '28%' },
-        incidentDate: { left: '42%', top: '89.2%', width: '42%' },
-        incidentTime: { left: '67%', top: '89.2%', width: '18%' },
       },
       second: {
         complainantName: { left: '43%', top: '91.2%', width: '37%' },
@@ -102,9 +128,7 @@ function OfficialComplaint({
         accusedAddress: { left: '24.5%', top: '41.5%', width: '71%' },
         accusedOnlineId: { left: '47%', top: '47.7%', width: '47%' },
         accusedPhone: { left: '24.5%', top: '50.8%', width: '71%' },
-        incidentDate: { left: '47%', top: '59.7%', width: '45%' },
         incidentPlace: { left: '57%', top: '66%', width: '37%' },
-        incidentTime: { left: '74%', top: '59.7%', width: '20%' },
         incidentSummary: { left: '42%', top: '86%', width: '52%', height: '7%' },
       },
       second: {
@@ -119,8 +143,6 @@ function OfficialComplaint({
         accusedName: { left: '25%', top: '39.2%', width: '20%' },
         accusedAddress: { left: '25%', top: '42.3%', width: '71%' },
         accusedPhone: { left: '25%', top: '45.3%', width: '71%' },
-        incidentDate: { left: '35%', top: '68.7%', width: '48%' },
-        incidentTime: { left: '68%', top: '68.7%', width: '26%' },
         incidentPlace: { left: '35%', top: '71.8%', width: '60%' },
         assaultBodyPart: { left: '37.5%', top: '77%', width: '56%', height: '4%' },
       },
@@ -179,6 +201,17 @@ function OfficialComplaint({
         : value
       return { field, value: previewValue, position, multiline: field === 'incidentSummary' || field === 'evidence' }
     })
+
+  const date = formDateParts(draft.incidentDate)
+  const time = formTimeParts(draft.incidentTime || draft.incidentDate)
+  const dateTimeTop = { fraud: '87%', defamation: '59.2%', assault: '70.2%' }[type]
+  const dateTimeFields: OverlayField[] = [
+    { field: 'incidentDate', value: date.year, position: { left: '38.4%', top: dateTimeTop, width: '4.8%', size: '1.7cqw' } },
+    { field: 'incidentDate', value: date.month, position: { left: '46.9%', top: dateTimeTop, width: '3%', size: '1.7cqw' } },
+    { field: 'incidentDate', value: date.day, position: { left: '55%', top: dateTimeTop, width: '2.9%', size: '1.7cqw' } },
+    { field: 'incidentTime', value: time.hour, position: { left: '63%', top: dateTimeTop, width: '3%', size: '1.7cqw' } },
+    { field: 'incidentTime', value: time.minute, position: { left: '70.8%', top: dateTimeTop, width: '3.3%', size: '1.7cqw' } },
+  ]
 
   const needsAttachment = needsSupplementalPage(draft)
   const attachmentRows = [
@@ -318,7 +351,7 @@ function OfficialComplaint({
 
   return <div className="document-print-root official-document" aria-label={`${templateLabels[type]} 경찰청 간이 고소장 미리보기`}>
     <div className="official-form-note">경찰청 원본 서식 · 입력한 내용은 빈칸에 표시됩니다 · 주민등록번호 등 민감한 정보는 출력 후 직접 작성하세요{needsSupplementalPage(draft) ? ' · 별지 포함' : ''}</div>
-    <OfficialPage src={officialPages[type][0]} pageNumber={1} fields={makeFields(firstPositions)} marks={firstMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
+    <OfficialPage src={officialPages[type][0]} pageNumber={1} fields={[...makeFields(firstPositions), ...dateTimeFields]} marks={firstMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
     <OfficialPage src={officialPages[type][1]} pageNumber={2} fields={makeFields(second)} marks={secondMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
     {needsAttachment && <article className="paper official-attachment">
       <h1>별지 · 사건 경위 및 추가 내용</h1>

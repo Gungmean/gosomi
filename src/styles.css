@@ -377,6 +377,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: #81bd8f; box-shadow: 0 0 0 3px #eaf6ec; }
 .form-field input::placeholder, .form-field textarea::placeholder { color: #b2bab3; }
 .form-field textarea { resize: vertical; min-height: 76px; }
+.form-choice-field { min-width: 0; margin: 0 0 18px; padding: 0; border: 0; }
+.form-choice-field legend { padding: 0; color: #555d56; font-size: 12px; font-weight: 670; line-height: 1.5; }
+.form-choice-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
+.form-choice-option { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 40px; padding: 6px 8px; border: 1px solid #e1e7e2; border-radius: 8px; color: #555d56; background: #fff; font-size: 12px; cursor: pointer; }
+.form-choice-option input { width: 14px; height: 14px; margin: 0; accent-color: #006617; cursor: pointer; }
+.form-choice-option.is-selected { border-color: #006617; background: #edf5ee; color: #006617; font-weight: 700; }
+.form-choice-option:focus-within { outline: 2px solid #81bd8f; outline-offset: 2px; }
+.form-choice-clear { display: block; margin: 5px 0 0 auto; padding: 2px 0; border: 0; background: transparent; color: #7b857d; font-size: 11px; text-decoration: underline; cursor: pointer; }
 
 /* Dialogs */
 .dialog-overlay { position: fixed; z-index: 50; inset: 0; background: #101d13a6; animation: fade-in .16s ease-out; }

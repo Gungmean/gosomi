@@ -140,7 +140,16 @@ export default function ComplaintPanel({
                   {typeQuestions[draft.type].map((item) => <label className="form-field" key={item.id}><span>{item.label}</span><select id={`draft-${item.id}`} value={draft.selections[item.id] || ''} onChange={(event) => setSelection(item.id, event.target.value)}><option value="">선택해주세요</option>{item.options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>)}
                   <h3 className="form-subheading">고소 관련 체크리스트</h3>
                   <p className="form-checklist-note">확인된 항목만 답해주세요. 모르는 내용은 모름으로 표시할 수 있어요.</p>
-                  {checklistQuestions[draft.type].map((item) => <label className="form-field" key={item.id}><span>{item.label}</span><select id={`draft-${item.id}`} value={draft.selections[item.id] || ''} onChange={(event) => setSelection(item.id, event.target.value)}><option value="">선택해주세요</option><option value="예">예</option><option value="아니오">아니오</option><option value="모름">모름</option></select></label>)}
+                  {checklistQuestions[draft.type].map((item) => <fieldset className="form-choice-field" key={item.id}>
+                    <legend>{item.label}</legend>
+                    <div className="form-choice-options">
+                      {['예', '아니오', '모름'].map((option) => <label className={`form-choice-option${draft.selections[item.id] === option ? ' is-selected' : ''}`} key={option}>
+                        <input type="radio" name={`draft-${item.id}`} value={option} checked={draft.selections[item.id] === option} onChange={() => setSelection(item.id, option)} />
+                        <span>{option}</span>
+                      </label>)}
+                    </div>
+                    {draft.selections[item.id] && <button type="button" className="form-choice-clear" onClick={() => setSelection(item.id, '')}>선택 취소</button>}
+                  </fieldset>)}
                 </div>}
               </Tabs.Content>
             </Tabs.Root>
