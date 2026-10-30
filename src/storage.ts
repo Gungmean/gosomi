@@ -1,5 +1,6 @@
 import type { AiSettings, Conversation } from './types'
 import { blankDraft, blankResponseDraft, defaultModels } from './types'
+import { enrichAccusedAccount, extractAccusedIdentity } from '../server/explicitFacts.mjs'
 
 const STORAGE_KEY = 'gosomi.conversations.v1'
 const SETTINGS_KEY = 'gosomi.settings.v1'
@@ -48,14 +49,28 @@ export function loadConversations(): Conversation[] {
     if (!Array.isArray(parsed)) return []
     return parsed.filter((item): item is Conversation =>
       Boolean(item && typeof item === 'object' && 'id' in item && 'messages' in item),
-    ).map((item) => ({
-      ...item,
-      draft: { ...blankDraft(), ...item.draft, selections: { ...(item.draft?.selections || {}) } },
-      caseMode: item.caseMode === 'respondent' ? 'respondent' : 'complainant',
-      responseDraft: { ...blankResponseDraft(), ...item.responseDraft },
-      receivedDocuments: Array.isArray(item.receivedDocuments) ? item.receivedDocuments : [],
-      precedents: Array.isArray(item.precedents) ? item.precedents : [],
-    }))
+    ).map((item) => {
+      const draft = { ...blankDraft(), ...item.draft, selections: { ...(item.draft?.selections || {}) } }
+      if (item.identityBackfillVersion !== 1 && item.caseMode !== 'respondent' && Array.isArray(item.messages)) {
+        const facts = [...item.messages].reverse()
+          .filter((message) => message?.role === 'user' && typeof message.text === 'string')
+          .map((message) => extractAccusedIdentity(message.text))
+        for (const field of ['accusedName', 'accusedPhone', 'accusedOnlineId', 'accusedAccount'] as const) {
+          if (!draft[field]) draft[field] = facts.find((entry) => entry[field])?.[field] || ''
+        }
+        const explicitAccount = facts.find((entry) => entry.accusedAccount)?.accusedAccount
+        if (explicitAccount) draft.accusedAccount = enrichAccusedAccount(draft.accusedAccount, explicitAccount)
+      }
+      return {
+        ...item,
+        draft,
+        identityBackfillVersion: 1,
+        caseMode: item.caseMode === 'respondent' ? 'respondent' : 'complainant',
+        responseDraft: { ...blankResponseDraft(), ...item.responseDraft },
+        receivedDocuments: Array.isArray(item.receivedDocuments) ? item.receivedDocuments : [],
+        precedents: Array.isArray(item.precedents) ? item.precedents : [],
+      }
+    })
   } catch {
     return []
   }

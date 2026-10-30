@@ -106,6 +106,7 @@ export interface Conversation {
   caseMode?: CaseMode
   responseDraft?: ResponseDraft
   receivedDocuments?: ReceivedDocument[]
+  identityBackfillVersion?: number
 }
 
 export interface AiSettings {
@@ -181,5 +182,6 @@ export const createConversation = (type: ComplaintType = 'general', caseMode: Ca
     caseMode,
     responseDraft: blankResponseDraft(),
     receivedDocuments: [],
+    identityBackfillVersion: 1,
   }
 }

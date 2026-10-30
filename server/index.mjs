@@ -3,6 +3,7 @@ import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
+import { enrichAccusedAccount, extractAccusedIdentity } from './explicitFacts.mjs'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -287,7 +288,7 @@ function parseAiOutput(output, caseMode = 'complainant') {
   }
 }
 
-function supplementExplicitFacts(result, messages, draft, responseDraft, caseMode) {
+export function supplementExplicitFacts(result, messages, draft, responseDraft, caseMode) {
   const userTexts = messages.filter((item) => item?.role === 'user').map((item) => item.text?.trim() || '')
   const latestUserText = userTexts.at(-1) || ''
   if (['사용자에게 보일 충분하고 구체적인 한국어 답변', '내용을 조금 더 자세히 알려주시겠어요?'].includes(result.message.trim())) {
@@ -312,6 +313,17 @@ function supplementExplicitFacts(result, messages, draft, responseDraft, caseMod
       result.responsePatch.allegation = `${allegation} 혐의(사용자 설명)`
     }
   } else {
+    const explicitIdentity = [...userTexts].reverse().map(extractAccusedIdentity)
+    for (const field of ['accusedName', 'accusedPhone', 'accusedOnlineId', 'accusedAccount']) {
+      if (!result.draftPatch[field] && !draft?.[field]) {
+        const value = explicitIdentity.find((facts) => facts[field])?.[field]
+        if (value) result.draftPatch[field] = value
+      }
+    }
+    const explicitAccount = explicitIdentity.find((facts) => facts.accusedAccount)?.accusedAccount
+    if (explicitAccount && result.draftPatch.accusedAccount) {
+      result.draftPatch.accusedAccount = enrichAccusedAccount(result.draftPatch.accusedAccount, explicitAccount)
+    }
     const narrative = [...userTexts].filter((text) => text.length >= 35).sort((a, b) => b.length - a.length)[0]
     const hasCaseFields = Object.keys(result.draftPatch).some((field) => field !== 'type' && field !== 'selections')
       || Object.entries(draft || {}).some(([field, value]) => field !== 'type' && field !== 'selections' && typeof value === 'string' && value.trim())

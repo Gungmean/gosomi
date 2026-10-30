@@ -21,6 +21,7 @@ function needsSupplementalPage(draft: ComplaintDraft) {
   ]
   return Boolean(
     draft.reason || draft.evidence || draft.request || draft.relatedCase ||
+    /예금주|명의자/u.test(draft.accusedAccount) ||
     singleLineFields.some(([value, limit]) => String(value).length > Number(limit)) ||
     (draft.incidentSummary && draft.incidentSummary.length > 30) ||
     (draft.damage && draft.damage.length > 18),
@@ -47,10 +48,10 @@ function OfficialPage({
       type="button"
       key={field}
       className={`official-value${multiline ? ' official-value-multiline' : ''}`}
-      style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size }}
+      style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size, backgroundColor: field === 'accusedBank' ? '#fff' : undefined }}
       title={`${field} 내용 수정: ${value}`}
       aria-label={`${field} 내용 수정: ${value}`}
-      onClick={() => onFieldClick(field)}
+      onClick={() => onFieldClick(field === 'accusedBank' ? 'accusedAccount' : field)}
     ><TypedDocumentText text={value} animateKey={animatedFields?.[field]} /></button>)}
   </div>
 }
@@ -75,6 +76,7 @@ function OfficialComplaint({
         accusedAddress: { left: '24.5%', top: '43.2%', width: '71%' },
         accusedPhone: { left: '24.5%', top: '46.3%', width: '71%' },
         accusedOnlineId: { left: '47%', top: '53.1%', width: '40%' },
+        accusedBank: { left: '23.5%', top: '56.7%', width: '19%' },
         accusedAccount: { left: '59%', top: '56.7%', width: '28%' },
         incidentDate: { left: '42%', top: '89.2%', width: '42%' },
         incidentTime: { left: '67%', top: '89.2%', width: '18%' },
@@ -123,6 +125,8 @@ function OfficialComplaint({
     },
   }
   const { first, second } = positions[type]
+  const accusedBank = draft.accusedAccount.match(/(?:[가-힣A-Za-z]{2,20}(?:은행|뱅크|증권|금고))|농협|수협|우체국/u)?.[0] || ''
+  const accusedAccountNumber = draft.accusedAccount.match(/[0-9Xx*＊][0-9Xx*＊-]{4,40}[0-9Xx*＊]/u)?.[0] || draft.accusedAccount
   const values: Record<string, string> = {
     complainantName: draft.complainantName,
     complainantAddress: draft.complainantAddress,
@@ -131,7 +135,8 @@ function OfficialComplaint({
     accusedAddress: draft.accusedAddress,
     accusedPhone: draft.accusedPhone,
     accusedOnlineId: draft.accusedOnlineId,
-    accusedAccount: draft.accusedAccount,
+    accusedBank,
+    accusedAccount: accusedAccountNumber,
     incidentDate: draft.incidentDate,
     incidentTime: draft.incidentTime,
     incidentPlace: draft.incidentPlace,
