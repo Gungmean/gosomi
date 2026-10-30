@@ -214,8 +214,7 @@ ${modeGuidance}
 ${attachedDocumentGuidance}
 ${complainantFlow}
 ${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
-반드시 아래 형태의 JSON 객체 하나로만 답하세요:
-{"message":"사용자에게 보일 충분하고 구체적인 한국어 답변","draftPatch":{},"responsePatch":{},"searchQuery":"","questions":[{"id":"q1","text":"치료를 받으셨나요?","answerType":"yes_no","detailPrompt":"어느 병원에서 어떤 치료를 받으셨나요?"}]}
+반드시 JSON 객체 하나로만 답하세요. 최상위 키는 message(문자열), draftPatch(객체), responsePatch(객체), searchQuery(문자열), questions(배열)입니다. questions의 각 항목에는 id, text, answerType을 넣고 필요할 때만 detailPrompt를 넣으세요. message에는 이번 사용자 입력에 실제로 답하는 한국어를 작성하세요. 형식 설명이나 예시 문구를 답변으로 복사하지 마세요.
 허용된 draftPatch 키: ${draftFields.join(', ')}, selections (${[...draftSelectionFields].join(', ')})
 허용된 responsePatch 키: ${responseFields.join(', ')}
 ${caseMode === 'respondent' ? '' : `현재 고소장 상태: ${JSON.stringify(compactDraft)}`}
@@ -286,6 +285,41 @@ function parseAiOutput(output, caseMode = 'complainant') {
       }]
     }),
   }
+}
+
+function supplementExplicitFacts(result, messages, draft, responseDraft, caseMode) {
+  const userTexts = messages.filter((item) => item?.role === 'user').map((item) => item.text?.trim() || '')
+  const latestUserText = userTexts.at(-1) || ''
+  if (['사용자에게 보일 충분하고 구체적인 한국어 답변', '내용을 조금 더 자세히 알려주시겠어요?'].includes(result.message.trim())) {
+    result.message = caseMode === 'respondent'
+      ? '말씀해주신 내용을 대응 메모에 정리했습니다. 원본 고소장의 혐의·사건 일시·요구 일정과 대조해 확인해주세요.'
+      : '말씀해주신 사건을 고소장 초안에 반영했습니다. 미리보기에서 사실관계와 누락된 항목을 확인해주세요.'
+  }
+  if (!latestUserText) return result
+
+  if (caseMode === 'respondent') {
+    if (!result.responsePatch.confirmedFacts && !responseDraft?.confirmedFacts && latestUserText.length >= 25) {
+      result.responsePatch.confirmedFacts = `사용자 설명(미확인): ${latestUserText.slice(0, 900)}`
+    }
+    if (!result.responsePatch.receivedDocument && !responseDraft?.receivedDocument && /고소장을?\s*받/.test(latestUserText)) {
+      result.responsePatch.receivedDocument = '고소장(사용자 설명)'
+    }
+    if (!result.responsePatch.appearanceDate && !responseDraft?.appearanceDate && /출석\s*(?:통보|요구).{0,10}(?:없|받지)/.test(latestUserText)) {
+      result.responsePatch.appearanceDate = '출석 통보 없음(사용자 설명)'
+    }
+    const allegation = ['사기', '명예훼손', '모욕', '폭행', '상해', '협박', '횡령', '배임', '절도'].find((term) => latestUserText.includes(`${term} 혐의`))
+    if (allegation && !result.responsePatch.allegation && !responseDraft?.allegation) {
+      result.responsePatch.allegation = `${allegation} 혐의(사용자 설명)`
+    }
+  } else {
+    const narrative = [...userTexts].filter((text) => text.length >= 35).sort((a, b) => b.length - a.length)[0]
+    const hasCaseFields = Object.keys(result.draftPatch).some((field) => field !== 'type' && field !== 'selections')
+      || Object.entries(draft || {}).some(([field, value]) => field !== 'type' && field !== 'selections' && typeof value === 'string' && value.trim())
+    if (!result.draftPatch.incidentSummary && !draft?.incidentSummary && narrative && hasCaseFields) {
+      result.draftPatch.incidentSummary = narrative.slice(0, 2000)
+    }
+  }
+  return result
 }
 
 function normalizeProviderAndModel(settings) {
@@ -654,7 +688,7 @@ app.post('/api/chat', async (request, response) => {
     const responseDocumentInput = safeCaseMode === 'respondent' ? documentInput : undefined
     const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages, responseDocumentInput), responseDocumentInput)
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
-    const result = parseAiOutput(output, safeCaseMode)
+    const result = supplementExplicitFacts(parseAiOutput(output, safeCaseMode), messages, draft, responseDraft, safeCaseMode)
     if (safeCaseMode === 'respondent') result.draftPatch = {}
     else {
       result.responsePatch = {}
