@@ -39,3 +39,20 @@ export async function searchPrecedents(query: string): Promise<{ results: Preced
   const response = await fetch(`/api/precedents?q=${encodeURIComponent(query)}`)
   return readJson(response)
 }
+
+const precedentOffenses = ['명예훼손', '모욕', '사기', '폭행', '상해', '협박', '스토킹', '횡령', '배임', '절도', '강요', '성폭력']
+const precedentIssues = ['기망', '편취', '변제', '고의', '공연성', '전파가능성', '사실적시', '허위사실', '정당방위', '상해진단서', '합의', '증거']
+
+/** Build a short, PII-free query for the official criminal precedent search. */
+export function getAutomaticPrecedentQuery(text: string): string {
+  const safeText = text
+    .replace(/01[016789][\s-]?\d{3,4}[\s-]?\d{4}/g, ' ')
+    .replace(/\d{6}[\s-]?\d{7}/g, ' ')
+    .replace(/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/g, ' ')
+  if (safeText.trim().length < 12) return ''
+
+  const offense = precedentOffenses.find((term) => safeText.includes(term))
+  if (!offense) return ''
+  const issues = precedentIssues.filter((term) => safeText.includes(term) && term !== offense).slice(0, 2)
+  return [offense, ...issues].join(' ')
+}

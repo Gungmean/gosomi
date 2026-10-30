@@ -6,7 +6,7 @@ import {
   KeyRound, Menu, MessageCircle, MoreHorizontal, Plus,
   Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
-import { askAi, searchPrecedents } from './api'
+import { askAi, getAutomaticPrecedentQuery, searchPrecedents } from './api'
 import ComplaintPanel from './components/ComplaintPanel'
 import ResponsePanel from './components/ResponsePanel'
 import ReceivedDocuments from './components/ReceivedDocuments'
@@ -261,7 +261,33 @@ export default function App() {
       const intakeSubmission = submittedQuestion && submittedAnswer
         ? { questionId: submittedQuestion.id, text: submittedAnswer.text, choice: submittedAnswer.choice }
         : undefined
-      const result = await askAi(settings, messagesForAi, target.draft, target.precedents, target.caseMode || 'complainant', target.responseDraft, documentInput, intakeSubmission)
+      let precedentsForAi = target.precedents
+      let automaticSearchQuery = ''
+      if (!precedentsForAi.length) {
+        const caseContext = [
+          text,
+          documentInput?.text,
+          ...messagesForAi.slice(-4).map((message) => message.text),
+          target.draft.incidentSummary,
+          target.draft.reason,
+          target.responseDraft?.allegation,
+          target.responseDraft?.claims,
+        ].filter(Boolean).join(' ')
+        automaticSearchQuery = getAutomaticPrecedentQuery(caseContext)
+        if (automaticSearchQuery) {
+          try {
+            const found = await searchPrecedents(automaticSearchQuery)
+            precedentsForAi = found.results
+            if (found.results.length) {
+              updateConversation(target.id, (conversation) => ({ ...conversation, precedents: found.results, updatedAt: Date.now() }))
+              setNotice(`답변에 참고할 공식 판례 ${found.results.length}건을 확인했습니다.`)
+            }
+          } catch {
+            // A precedent service outage should not prevent the chat response.
+          }
+        }
+      }
+      const result = await askAi(settings, messagesForAi, target.draft, precedentsForAi, target.caseMode || 'complainant', target.responseDraft, documentInput, intakeSubmission)
       const responseText = result.modelUsed
         ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
         : result.message
@@ -295,7 +321,7 @@ export default function App() {
       }))
       if ((!active || activeId === target.id) && target.caseMode !== 'respondent' && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
       if ((!active || activeId === target.id) && target.caseMode === 'respondent' && Object.keys(result.responsePatch || {}).length > 0) setPreviewOpen(true)
-      if (result.searchQuery) {
+      if (result.searchQuery && !precedentsForAi.length && result.searchQuery !== automaticSearchQuery) {
         try {
           const found = await searchPrecedents(result.searchQuery)
           if (found.results.length) {

@@ -64,7 +64,7 @@ app.get('/api/precedents', async (request, response) => {
       type: 'JSON',
       query,
       search: offense === safeQuery ? '1' : '2',
-      display: '100',
+      display: '40',
       page: '1',
       datSrcNm: '대법원',
     }).forEach(([name, value]) => searchUrl.searchParams.set(name, value))
@@ -72,7 +72,7 @@ app.get('/api/precedents', async (request, response) => {
     const list = (await getJson(searchUrl)).PrecSearch?.prec || []
     const entries = (Array.isArray(list) ? list : [list])
       .filter((item) => item && item['사건종류명'] === '형사' && item['판례일련번호'] && (!offense || String(item['사건명'] || '').includes(offense)))
-      .slice(0, 25)
+      .slice(0, 10)
     const specificWords = safeQuery.split(/[\s,]+/).filter((term) => term.length >= 2 && term !== offense)
 
     const details = await Promise.all(entries.map(async (item) => {
@@ -188,7 +188,7 @@ ${hasPriorAssistantReply
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
 사건 답변은 가능한 경우 **핵심 요약 → 확인된 사실과 추가 확인 사항 → 관련 법적 쟁점과 근거 → 지금 할 일** 순서로 작성하세요. 해당 정보가 없거나 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 표시하세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
-아래 verifiedCases에 있는 판례만 사건번호와 링크를 근거로 언급할 수 있습니다. 관련성이 불분명하면 언급하지 마세요.
+아래 verifiedCases는 공식 판례 검색에서 확인한 결과입니다. 현재 질문과 실제 쟁점이 맞는 판례가 있으면 답변 끝에 **참고 판례** 항목을 두고, 사건번호·선고일·법원과 핵심 법리를 짧게 설명한 뒤 반드시 제공된 URL을 마크다운 링크로 연결하세요. 요약이 비어 있거나 쟁점 관련성이 불분명하면 인용하지 마세요. 검색 결과를 사건의 결론이나 승소 가능성을 뒷받침하는 것처럼 과장하지 말고, 판례의 사실관계가 다르면 그 차이를 밝혀 주세요. 목록에 없는 판례·사건번호·링크를 만들지 마세요.
 ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : `고소장 작성 모드에서는 사용자의 사건 설명과 후속 답변에서 확인된 사실을 매 응답마다 draftPatch의 알맞은 필드에 반영하세요. 채팅 답변(message)에만 사실을 적고 draftPatch를 비워 두지 마세요. 일시·장소·행위·피해·증거·상대 식별정보를 각각 대응하는 필드에 넣고, 사건 유형이 명확하면 type도 fraud/defamation/assault/general 중 선택하세요. 선택형 질문에 답할 근거가 분명한 경우 draftPatch.selections의 해당 키도 채우세요. 사용자가 말하지 않은 정보는 만들지 말고, 불확실한 값은 비워 두고 질문하세요. 기존 값을 임의로 지우지 마세요.`}
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
