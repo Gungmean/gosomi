@@ -7,6 +7,7 @@ import {
   Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
 import { askAi, getAutomaticPrecedentQuery, searchPrecedents } from './api'
+import { demoScenarios, type DemoScenario } from './demoScenarios'
 import ComplaintPanel from './components/ComplaintPanel'
 import ResponsePanel from './components/ResponsePanel'
 import ReceivedDocuments from './components/ReceivedDocuments'
@@ -145,6 +146,7 @@ export default function App() {
     setStartType(type)
     setStartMode(mode)
     setInput(prompt)
+    setPreviewOpen(false)
     setSidebarOpen(false)
     return next
   }
@@ -300,7 +302,8 @@ export default function App() {
           }
         }
       }
-      const result = await askAi(settings, messagesForAi, target.draft, precedentsForAi, target.caseMode || 'complainant', target.responseDraft, documentInput, intakeSubmission)
+      const demo = target.messages.length === 0 && demoScenarios.some((scenario) => scenario.prompt === text)
+      const result = await askAi(settings, messagesForAi, target.draft, precedentsForAi, target.caseMode || 'complainant', target.responseDraft, documentInput, intakeSubmission, demo)
       const responseText = result.modelUsed
         ? `${result.message}\n\n> 선택한 모델이 혼잡해 **${result.modelUsed}** 모델로 대신 답변했습니다.`
         : result.message
@@ -423,10 +426,26 @@ export default function App() {
     newConversation(startType, '', mode)
   }
 
+  function selectDemoScenario(scenario: DemoScenario) {
+    setStartMode(scenario.mode)
+    setStartType(scenario.type)
+    setInput(scenario.prompt)
+    setPreviewOpen(false)
+    if (active && active.messages.length === 0) {
+      updateConversation(active.id, (conversation) => ({
+        ...conversation,
+        caseMode: scenario.mode,
+        draft: { ...conversation.draft, type: scenario.type },
+        updatedAt: Date.now(),
+      }))
+    }
+    landingTextareaRef.current?.focus()
+  }
+
   return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
-        <button className="brand" onClick={() => { setActiveId(null); setSidebarOpen(false) }} aria-label="고소미 홈으로">
+        <button className="brand" onClick={() => { setActiveId(null); setPreviewOpen(false); setSidebarOpen(false) }} aria-label="고소미 홈으로">
           <img src="/gosomi-logo.png" alt="고소미 고소도우미" />
         </button>
         <button className="mobile-sidebar-close icon-button" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)}><X size={20} /></button>
@@ -486,6 +505,12 @@ export default function App() {
               {([
                 ['fraud', '사기'], ['defamation', '모욕·명예훼손'], ['assault', '폭행'], ['general', '잘 모르겠어요'],
               ] as [ComplaintType, string][]).map(([type, label]) => <button key={type} className={startType === type ? 'selected' : ''} onClick={() => selectComplaintType(type)} aria-pressed={startType === type}>{label}</button>)}
+            </div>
+          </div>
+          <div className="demo-scenarios">
+            <div className="demo-scenarios-heading"><strong>가상 사례로 빠르게 체험</strong><span>선택하면 아래 입력창에 채워집니다. 전송 전에 수정할 수 있어요.</span></div>
+            <div className="demo-scenarios-options">
+              {demoScenarios.map((scenario) => <button key={scenario.id} type="button" className={input === scenario.prompt ? 'selected' : ''} aria-pressed={input === scenario.prompt} onClick={() => selectDemoScenario(scenario)}>{scenario.label}</button>)}
             </div>
           </div>
           {startMode === 'respondent' && <ReceivedDocuments documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}

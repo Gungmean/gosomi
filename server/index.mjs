@@ -164,7 +164,8 @@ const draftSelectionFields = new Set([
 
 const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceDate', 'allegation', 'claims', 'confirmedFacts', 'disputedPoints', 'evidenceToPreserve', 'questionsToConfirm', 'nextSteps']
 
-function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = [], documentInput = undefined) {
+function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = [], documentInput = undefined, demo = false) {
+  const isDemoOpening = demo === true && !messages.some((message) => message?.role === 'assistant')
   const hasCollectedDraftFacts = Object.entries(draft || {}).some(([key, value]) => key !== 'type' && key !== 'selections' && typeof value === 'string' && value.trim())
   const hasPriorAssistantReply = hasCollectedDraftFacts || (Array.isArray(messages) && messages.some((message) => message?.role === 'assistant' && Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0))
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
@@ -213,6 +214,7 @@ ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 �
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
 ${modeGuidance}
 ${attachedDocumentGuidance}
+${isDemoOpening ? '이번 입력은 가상 체험 사례입니다. 제시된 사실만 사용하고, 실제 문서를 받거나 확인한 것처럼 말하지 마세요. 첫 답변은 사건 요약과 지금 채운 내용 중심으로 2~4문장만 간결하게 쓰세요. 확인 질문은 채팅 본문에 반복하지 마세요.' : ''}
 ${complainantFlow}
 ${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 JSON 객체 하나로만 답하세요. 최상위 키는 message(문자열), draftPatch(객체), responsePatch(객체), searchQuery(문자열), questions(배열)입니다. questions의 각 항목에는 id, text, answerType을 넣고 필요할 때만 detailPrompt를 넣으세요. message에는 이번 사용자 입력에 실제로 답하는 한국어를 작성하세요. 형식 설명이나 예시 문구를 답변으로 복사하지 마세요.
@@ -291,7 +293,8 @@ function parseAiOutput(output, caseMode = 'complainant') {
 export function supplementExplicitFacts(result, messages, draft, responseDraft, caseMode) {
   const userTexts = messages.filter((item) => item?.role === 'user').map((item) => item.text?.trim() || '')
   const latestUserText = userTexts.at(-1) || ''
-  if (['사용자에게 보일 충분하고 구체적인 한국어 답변', '내용을 조금 더 자세히 알려주시겠어요?'].includes(result.message.trim())) {
+  const genericMessage = ['사용자에게 보일 충분하고 구체적인 한국어 답변', '내용을 조금 더 자세히 알려주시겠어요?'].includes(result.message.trim())
+  if (genericMessage) {
     result.message = caseMode === 'respondent'
       ? '말씀해주신 내용을 대응 메모에 정리했습니다. 원본 고소장의 혐의·사건 일시·요구 일정과 대조해 확인해주세요.'
       : '말씀해주신 사건을 고소장 초안에 반영했습니다. 미리보기에서 사실관계와 누락된 항목을 확인해주세요.'
@@ -299,9 +302,25 @@ export function supplementExplicitFacts(result, messages, draft, responseDraft, 
   if (!latestUserText) return result
 
   if (caseMode === 'respondent') {
+    const policeContact = /경찰.{0,30}(?:전화|연락)|(?:전화|연락).{0,30}경찰/u.test(latestUserText)
+    const noOriginal = /고소장\s*원본.{0,16}(?:받지\s*못|받지\s*않|없|미수령)/u.test(latestUserText)
+    const unknownAppearance = /출석\s*(?:일정|일시|날짜).{0,20}(?:확인하지\s*못|모르|미확인)/u.test(latestUserText)
     if (!result.responsePatch.confirmedFacts && !responseDraft?.confirmedFacts && latestUserText.length >= 25) {
-      result.responsePatch.confirmedFacts = `사용자 설명(미확인): ${latestUserText.slice(0, 900)}`
+      const factualText = latestUserText.replace(/(?:지금\s*)?(?:먼저\s*)?(?:확인할|해야\s*할).{0,80}(?:정리해\s*주세요|알려주세요)[.!。]?$/u, '').trim()
+      result.responsePatch.confirmedFacts = `사용자 설명(미확인): ${factualText.slice(0, 900)}`
     }
+    if (noOriginal) result.responsePatch.receivedDocument = policeContact ? '경찰 연락(고소장 원본 미수령, 사용자 설명)' : '고소장 원본 미수령(사용자 설명)'
+    else if (policeContact && !result.responsePatch.receivedDocument && !responseDraft?.receivedDocument) result.responsePatch.receivedDocument = '경찰 연락(사용자 설명)'
+    if (policeContact && !result.responsePatch.agency && !responseDraft?.agency) result.responsePatch.agency = '경찰(세부 기관 미확인, 사용자 설명)'
+    if (unknownAppearance) result.responsePatch.appearanceDate = '출석 일정 미확인(사용자 설명)'
+    const contactDate = latestUserText.match(/(\d{4}년\s*\d{1,2}월\s*\d{1,2}일).{0,35}경찰.{0,35}(?:전화|연락)/u)?.[1]
+    if (contactDate && !result.responsePatch.receivedAt && !responseDraft?.receivedAt) result.responsePatch.receivedAt = `${contactDate}(사용자 설명)`
+    const buyerClaim = latestUserText.match(/구매자(?:는|가)\s*([^.!?]{3,100}?)고\s*주장/u)?.[1]
+    if (buyerClaim && !result.responsePatch.claims && !responseDraft?.claims) result.responsePatch.claims = `구매자 주장(사용자 설명): ${buyerClaim.trim()}`
+    const namedEvidence = ['택배 접수증', '송장', '채팅 기록', '대화 캡처', '송금 내역', '입금 내역', '계약서'].filter((item) => latestUserText.includes(item))
+    if (namedEvidence.length && !result.responsePatch.evidenceToPreserve && !responseDraft?.evidenceToPreserve) result.responsePatch.evidenceToPreserve = namedEvidence.join(', ')
+    if (policeContact && !result.responsePatch.questionsToConfirm && !responseDraft?.questionsToConfirm) result.responsePatch.questionsToConfirm = '연락한 기관의 정식 명칭과 담당자, 사건번호, 출석 일정, 고소장 원본 유무'
+    if (policeContact && !result.responsePatch.nextSteps && !responseDraft?.nextSteps) result.responsePatch.nextSteps = '연락한 기관의 공식 대표번호로 연락 사실과 출석 요구를 확인하고, 관련 자료의 원본을 보존합니다.'
     if (!result.responsePatch.receivedDocument && !responseDraft?.receivedDocument && /고소장을?\s*받/.test(latestUserText)) {
       result.responsePatch.receivedDocument = '고소장(사용자 설명)'
     }
@@ -312,6 +331,7 @@ export function supplementExplicitFacts(result, messages, draft, responseDraft, 
     if (allegation && !result.responsePatch.allegation && !responseDraft?.allegation) {
       result.responsePatch.allegation = `${allegation} 혐의(사용자 설명)`
     }
+    if (genericMessage && policeContact) result.message = '고소장 원본과 출석 일정이 확인되지 않았습니다. 연락한 기관의 공식 대표번호로 사건번호와 출석 요구를 확인하고, 가지고 있는 거래 자료 원본을 보존해 주세요. 확인한 내용은 대응 메모에 구분해 적었습니다.'
   } else {
     const explicitIdentity = [...userTexts].reverse().map(extractAccusedIdentity)
     for (const field of ['accusedName', 'accusedPhone', 'accusedOnlineId', 'accusedAccount']) {
@@ -690,7 +710,7 @@ async function callProvider(settings, messages, prompt, documentInput = {}) {
 }
 
 app.post('/api/chat', async (request, response) => {
-  const { settings, messages, draft, precedents, caseMode, responseDraft, documentInput, intakeSubmission } = request.body || {}
+  const { settings, messages, draft, precedents, caseMode, responseDraft, documentInput, intakeSubmission, demo } = request.body || {}
   if (!settings || !Array.isArray(messages) || messages.length === 0) {
     response.status(400).json({ error: '대화 내용과 API 설정을 확인해주세요.' })
     return
@@ -709,7 +729,7 @@ app.post('/api/chat', async (request, response) => {
       return
     }
     const responseDocumentInput = safeCaseMode === 'respondent' ? documentInput : undefined
-    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages, responseDocumentInput), responseDocumentInput)
+    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages, responseDocumentInput, demo), responseDocumentInput)
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
     const result = supplementExplicitFacts(parseAiOutput(output, safeCaseMode), messages, draft, responseDraft, safeCaseMode)
     if (safeCaseMode === 'respondent') result.draftPatch = {}

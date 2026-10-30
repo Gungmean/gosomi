@@ -17,13 +17,14 @@ export async function askAi(
   responseDraft?: ResponseDraft,
   documentInput?: DocumentInput,
   intakeSubmission?: { questionId: string; text?: string; choice?: 'yes' | 'no' | 'unknown' },
+  demo = false,
 ): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; responsePatch?: Partial<ResponseDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string; instant?: boolean }> {
   let response: Response
   try {
     response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settings, messages, draft, precedents, caseMode, responseDraft, documentInput, intakeSubmission }),
+      body: JSON.stringify({ settings, messages, draft, precedents, caseMode, responseDraft, documentInput, intakeSubmission, demo }),
       signal: AbortSignal.timeout(55000),
     })
   } catch (error) {

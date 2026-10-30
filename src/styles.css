@@ -101,6 +101,14 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .incident-type-options button { min-height: 35px; padding: 0 13px; border: 1px solid #e1e6e1; border-radius: 7px; background: #fff; color: #5f6861; font-size: 13px; font-weight: 550; transition: border-color .15s, background .15s, color .15s; }
 .incident-type-options button:hover { border-color: #aebcaf; }
 .incident-type-options button.selected { border-color: #718c75; background: #f3f7f3; color: #294b30; }
+.demo-scenarios { margin: 5px 0 15px; }
+.demo-scenarios-heading { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; margin-bottom: 9px; }
+.demo-scenarios-heading strong { color: #354b39; font-size: 12px; font-weight: 700; }
+.demo-scenarios-heading span { color: #8a958c; font-size: 11px; }
+.demo-scenarios-options { display: flex; flex-wrap: wrap; gap: 7px; }
+.demo-scenarios-options button { min-height: 32px; padding: 0 11px; border: 1px solid #dce6de; border-radius: 7px; background: #fff; color: #526357; font-size: 12px; font-weight: 580; }
+.demo-scenarios-options button:hover { border-color: #91b698; background: #f7fbf8; color: var(--green); }
+.demo-scenarios-options button.selected { border-color: #73a17b; background: #edf6ef; color: var(--green); }
 .landing-composer { width: 100%; border: 1px solid #ccd7ce; border-radius: 11px; background: #fff; transition: border-color .15s, box-shadow .15s; }
 .landing-composer:focus-within { border-color: #7e9b83; box-shadow: 0 0 0 3px #eff5f0; }
 .landing-composer-input { display: flex; align-items: stretch; min-width: 0; }
@@ -474,6 +482,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .case-mode-picker span { font-size: 10px; }
   .incident-type-options { gap: 7px; }
   .incident-type-options button { padding: 0 11px; font-size: 12px; }
+  .demo-scenarios-heading { display: grid; gap: 3px; }
+  .demo-scenarios-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .demo-scenarios-options button { text-align: center; }
   .landing-composer textarea { min-height: 120px; font-size: 14px; }
   .welcome-tools { gap: 15px; flex-wrap: wrap; }
   .welcome-privacy { margin-top: 22px; }

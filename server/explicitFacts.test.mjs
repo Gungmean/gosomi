@@ -23,6 +23,12 @@ test('extracts explicitly labelled name and contact number', () => {
   assert.equal(facts.accusedPhone, '010-1234-5678')
 })
 
+test('extracts both seller identifiers from the short demonstration prompt', () => {
+  const facts = extractAccusedIdentity('판매자 이름은 박민준이고 닉네임은 별빛상점입니다. 2026년 9월 5일 중고거래 앱에서 송금했습니다.')
+  assert.equal(facts.accusedName, '박민준')
+  assert.equal(facts.accusedOnlineId, '별빛상점')
+})
+
 test('does not classify the complainant account as an accused account', () => {
   assert.equal(extractAccusedIdentity('판매자에게 송금했지만 제 계좌번호 123-456-7890은 알려주지 않았습니다.').accusedAccount, undefined)
 })
@@ -46,4 +52,19 @@ test('keeps bank and account holder when the AI returned only the number', () =>
     {}, {}, 'complainant',
   )
   assert.equal(result.draftPatch.accusedAccount, explicit)
+})
+
+test('keeps a received-complaint demo grounded in the stated phone call and available records', () => {
+  const text = '2026년 9월 15일 경찰에서 사기 혐의 고소장이 접수됐다고 전화했습니다. 고소장 원본은 아직 받지 못했습니다. 구매자는 중고거래한 물건을 받지 못했다고 주장하지만, 저는 물건을 발송했습니다. 정확한 출석 일정과 사건번호는 아직 확인하지 못했습니다. 택배 접수증과 채팅 기록을 보관하고 있습니다. 지금 먼저 확인할 일과 대응 메모를 정리해 주세요.'
+  const result = supplementExplicitFacts(
+    { message: '사용자에게 보일 충분하고 구체적인 한국어 답변', draftPatch: {}, responsePatch: {} },
+    [{ role: 'user', text }], {}, {}, 'respondent',
+  )
+  assert.match(result.responsePatch.receivedDocument, /경찰 연락.*원본 미수령/u)
+  assert.match(result.responsePatch.allegation, /사기 혐의/u)
+  assert.match(result.responsePatch.appearanceDate, /미확인/u)
+  assert.match(result.responsePatch.evidenceToPreserve, /택배 접수증, 채팅 기록/u)
+  assert.match(result.message, /공식 대표번호/u)
+  assert.doesNotMatch(result.responsePatch.confirmedFacts, /정리해 주세요/u)
+  assert.doesNotMatch(result.responsePatch.confirmedFacts, /지금 먼저 확인할 일/u)
 })
