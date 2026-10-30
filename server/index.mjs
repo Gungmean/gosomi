@@ -34,7 +34,12 @@ function plainText(value) {
 async function getJson(url, options = {}) {
   const response = await fetch(url, { signal: AbortSignal.timeout(18000), ...options })
   if (!response.ok) throw new Error(`외부 서비스 오류 (${response.status})`)
-  return response.json()
+  const data = await response.json()
+  if (data?.result && data?.msg && !data?.PrecSearch && !data?.PrecService) {
+    if (/검증|인증|사용자 정보/.test(`${data.result} ${data.msg}`)) throw new Error('LAW_API_AUTH')
+    throw new Error('LAW_API_RESPONSE')
+  }
+  return data
 }
 
 app.get('/api/status', (_request, response) => {
@@ -56,26 +61,31 @@ app.get('/api/precedents', async (request, response) => {
   try {
     const offense = ['명예훼손', '모욕', '사기', '폭행', '협박', '스토킹', '횡령', '배임', '절도', '강요', '성폭력']
       .find((term) => safeQuery.includes(term))
-    const query = safeQuery
-    const searchUrl = new URL(`${lawApiRoot}/lawSearch.do`)
-    Object.entries({
-      OC: officialApiKey,
-      target: 'prec',
-      type: 'JSON',
-      query,
-      search: offense === safeQuery ? '1' : '2',
-      display: '40',
-      page: '1',
-      datSrcNm: '대법원',
-    }).forEach(([name, value]) => searchUrl.searchParams.set(name, value))
-
-    const list = (await getJson(searchUrl)).PrecSearch?.prec || []
-    const entries = (Array.isArray(list) ? list : [list])
-      .filter((item) => item && item['사건종류명'] === '형사' && item['판례일련번호'] && (!offense || String(item['사건명'] || '').includes(offense)))
-      .slice(0, 10)
+    const searchQueries = offense
+      ? [
+          { search: '1', query: offense },
+          { search: '2', query: offense },
+          ...(safeQuery !== offense ? [{ search: '2', query: safeQuery }] : []),
+        ]
+      : [{ search: '1', query: safeQuery }, { search: '2', query: safeQuery }]
+    const listResponses = await Promise.all(searchQueries.map(async ({ search, query }) => {
+      const searchUrl = new URL(`${lawApiRoot}/lawSearch.do`)
+      Object.entries({ OC: officialApiKey, target: 'prec', type: 'JSON', query, search, display: '100', page: '1', sort: 'ddes' })
+        .forEach(([name, value]) => searchUrl.searchParams.set(name, value))
+      return getJson(searchUrl)
+    }))
+    const entries = [...new Map(listResponses.flatMap((data) => {
+      const list = data.PrecSearch?.prec || []
+      return (Array.isArray(list) ? list : [list])
+    }).filter((item) => item?.['판례일련번호'] && (!item['사건종류명'] || item['사건종류명'] === '형사')).map((item) => [String(item['판례일련번호']), item])).values()]
     const specificWords = safeQuery.split(/[\s,]+/).filter((term) => term.length >= 2 && term !== offense)
+    const candidates = entries.map((item) => ({
+      item,
+      score: (offense && String(item['사건명'] || '').includes(offense) ? 12 : 0)
+        + specificWords.reduce((score, term) => score + (String(item['사건명'] || '').includes(term) ? 4 : 0), 0),
+    })).sort((a, b) => b.score - a.score).slice(0, 15).map(({ item }) => item)
 
-    const details = await Promise.all(entries.map(async (item) => {
+    const details = await Promise.all(candidates.map(async (item) => {
       const id = String(item['판례일련번호'])
       const detailUrl = new URL(`${lawApiRoot}/lawService.do`)
       Object.entries({ OC: officialApiKey, target: 'prec', type: 'JSON', ID: id })
@@ -117,14 +127,20 @@ app.get('/api/precedents', async (request, response) => {
 
     const ranked = details.map((item) => ({
       item,
-      score: (item.title.includes(query) ? 6 : 0) + specificWords.reduce((score, term) => score + (item.title.includes(term) ? 4 : 0) + (item.searchText.includes(term) ? 2 : 0), 0),
-    })).filter(({ score }) => !specificWords.length || score > 0).sort((a, b) => b.score - a.score).slice(0, 6).map(({ item }) => {
+      score: (item.title.includes(offense || safeQuery) ? 6 : 0) + specificWords.reduce((score, term) => score + (item.title.includes(term) ? 4 : 0) + (item.searchText.includes(term) ? 2 : 0), 0),
+    })).sort((a, b) => b.score - a.score).slice(0, 15).map(({ item }) => {
       const { searchText, ...result } = item
       return result
     })
     response.json({ results: ranked, sampleKey })
-  } catch {
-    response.status(502).json({ error: '공식 판례 서비스를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.' })
+  } catch (error) {
+    if (error instanceof Error && error.message === 'LAW_API_AUTH') {
+      response.status(503).json({ error: sampleKey
+        ? '판례 검색 인증키가 예제값(test)이라 조회할 수 없습니다. 국가법령정보센터 인증키와 서비스 도메인을 서버 환경변수 LAW_API_OC에 등록해주세요.'
+        : '판례 검색 인증에 실패했습니다. 서버의 LAW_API_OC 인증키와 국가법령정보센터에 등록한 서비스 도메인을 확인해주세요.' })
+      return
+    }
+    response.status(502).json({ error: '국가법령정보센터 판례 검색에 실패했습니다. 잠시 후 다시 시도해주세요.' })
   }
 })
 

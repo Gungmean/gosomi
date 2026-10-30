@@ -14,13 +14,20 @@ export default function PrecedentDialog({ open, onOpenChange, precedents, onResu
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [sampleKey, setSampleKey] = useState(false)
+  const [hasSearched, setHasSearched] = useState(false)
+  const [searchResults, setSearchResults] = useState<Precedent[]>([])
+  const visibleResults = hasSearched ? searchResults : precedents
 
   async function search() {
     if (query.trim().length < 2 || loading) return
     setLoading(true)
     setError('')
+    setHasSearched(true)
+    setSearchResults([])
+    setSampleKey(false)
     try {
       const result = await searchPrecedents(query.trim())
+      setSearchResults(result.results)
       onResults(result.results)
       setSampleKey(result.sampleKey)
     } catch (cause) {
@@ -42,9 +49,11 @@ export default function PrecedentDialog({ open, onOpenChange, precedents, onResu
         </form>
         {error && <div className="inline-error">{error}</div>}
         {sampleKey && <p className="sample-key-note">현재 공식 API의 예제 인증값으로 조회 중입니다. 배포 시 발급받은 인증값을 연결해야 합니다.</p>}
+        {hasSearched && !loading && !error && <p className="precedent-result-count">검색 결과 {visibleResults.length}건</p>}
         <div className="precedent-list">
-          {!precedents.length && !loading && <div className="empty-precedents"><BookOpen size={28} /><strong>검색한 판례가 여기에 표시됩니다</strong><span>원문이 확인된 판례만 답변의 근거로 사용할 수 있어요.</span></div>}
-          {precedents.map((item) => <article className="precedent-card" key={item.id}>
+          {!visibleResults.length && !loading && !hasSearched && <div className="empty-precedents"><BookOpen size={28} /><strong>검색한 판례가 여기에 표시됩니다</strong><span>원문이 확인된 판례만 답변의 근거로 사용할 수 있어요.</span></div>}
+          {!visibleResults.length && !loading && hasSearched && !error && <div className="empty-precedents"><BookOpen size={28} /><strong>검색 결과가 없습니다</strong><span>죄명만 입력하거나 표현을 짧게 바꿔 다시 검색해보세요.</span></div>}
+          {visibleResults.map((item) => <article className="precedent-card" key={item.id}>
             <div className="precedent-meta">{item.court || '법원 정보 확인'} <span>·</span> {item.decidedAt || '선고일 확인'} <span>·</span> {item.caseNumber}</div>
             <h3>{item.title}</h3>
             <p>{item.summary ? <><strong>{item.summaryKind === 'excerpt' ? '원문 발췌 · ' : '판결 요지 · '}</strong>{item.summary}</> : '판결 요지를 가져오지 못했습니다. 원문에서 내용을 확인해주세요.'}</p>

@@ -418,6 +418,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @keyframes spin { to { transform: rotate(360deg); } }
 .inline-error { margin-top: 10px; border-radius: 7px; padding: 9px 10px; background: #fff3f1; color: #aa463b; font-size: 11px; }
 .sample-key-note { margin: 10px 0 0 !important; color: #8b9076 !important; font-size: 10px !important; }
+.precedent-result-count { margin: 12px 0 -6px; color: #617b66; font-size: 11px; font-weight: 650; }
 .precedent-list { min-height: 180px; max-height: 43vh; overflow-y: auto; margin-top: 16px; padding-right: 4px; }
 .empty-precedents { min-height: 174px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #aeb9b0; text-align: center; }
 .empty-precedents strong { color: #69766c; font-size: 12px; font-weight: 680; margin-top: 5px; }
