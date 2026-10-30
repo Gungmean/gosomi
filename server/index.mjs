@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
+import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, isSimpleIntakeSubmission, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
 import { enrichAccusedAccount, extractAccusedIdentity } from './explicitFacts.mjs'
 
 const app = express()
@@ -697,6 +697,17 @@ app.post('/api/chat', async (request, response) => {
   }
   try {
     const safeCaseMode = caseMode === 'respondent' ? 'respondent' : 'complainant'
+    if (safeCaseMode === 'complainant' && isSimpleIntakeSubmission(intakeSubmission)) {
+      const draftPatch = applyCurrentIntakeAnswer({}, draft, intakeSubmission)
+      const mergedDraft = { ...draft, ...draftPatch, selections: { ...draft?.selections, ...draftPatch.selections } }
+      const followUpQuestions = nextComplaintIntakeQuestion(mergedDraft, messages) || []
+      const skipped = intakeSubmission.choice === 'unknown' || /^(?:모름\s*\/\s*건너뛰기|건너뛰기)$/u.test(String(intakeSubmission.text || '').trim())
+      response.json({
+        message: skipped ? '이 항목은 비워 두고 다음으로 넘어갈게요.' : '말씀해 주신 내용을 초안에 반영했습니다.',
+        draftPatch, responsePatch: {}, searchQuery: '', followUpQuestions, instant: true,
+      })
+      return
+    }
     const responseDocumentInput = safeCaseMode === 'respondent' ? documentInput : undefined
     const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages, responseDocumentInput), responseDocumentInput)
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text

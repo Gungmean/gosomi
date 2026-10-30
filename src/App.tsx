@@ -35,6 +35,14 @@ function titleFrom(text: string) {
   return cleaned.length > 25 ? `${cleaned.slice(0, 25)}…` : cleaned || '새 대화'
 }
 
+function choiceFromShortReply(text: string): FollowUpAnswer['choice'] | undefined {
+  const normalized = text.trim().replace(/[.!。！？?\s]/g, '')
+  if (/^(?:네|예|맞아요|맞습니다|그렇습니다)$/u.test(normalized)) return 'yes'
+  if (/^(?:아니요|아니오|아뇨|아닙니다|없어요|없습니다)$/u.test(normalized)) return 'no'
+  if (/^(?:모름|몰라요|잘모르겠어요|건너뛰기)$/u.test(normalized)) return 'unknown'
+  return undefined
+}
+
 function findRestorableConversation() {
   return loadConversations().find((conversation) => conversation.messages.length > 0 || Boolean(conversation.receivedDocuments?.length))
 }
@@ -53,11 +61,7 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState('')
-  const [typingMessageId, setTypingMessageId] = useState<string | null>(() => {
-    const initialConv = findRestorableConversation()
-    const lastAssistant = initialConv ? [...initialConv.messages].reverse().find((m) => m.role === 'assistant') : undefined
-    return lastAssistant?.id || null
-  })
+  const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
   const [completedTypingId, setCompletedTypingId] = useState<string | null>(null)
   const [animatedDraftFields, setAnimatedDraftFields] = useState<Record<string, string>>({})
   const chatScrollRef = useRef<HTMLDivElement>(null)
@@ -224,6 +228,15 @@ export default function App() {
       if (!window.confirm('답변을 위해 대화 내용과 선택한 첨부 문서가 외부 AI 제공자에게 전송됩니다. 개인정보를 가리고 계속할까요?')) return
     }
     const target = active || createConversation(startType, startMode)
+    const latestAssistant = [...target.messages].reverse().find((message) => message.role === 'assistant')
+    const pendingChoiceCard = !followUpSubmission && target.caseMode !== 'respondent'
+      && latestAssistant && !latestAssistant.followUpSubmitted
+      && latestAssistant.followUpQuestions?.length === 1 && latestAssistant.followUpQuestions[0].answerType === 'yes_no'
+      ? latestAssistant : undefined
+    const quickChoice = pendingChoiceCard ? choiceFromShortReply(text) : undefined
+    const effectiveFollowUpSubmission = followUpSubmission || (pendingChoiceCard && quickChoice
+      ? { messageId: pendingChoiceCard.id, answers: { [pendingChoiceCard.followUpQuestions![0].id]: { choice: quickChoice } } }
+      : undefined)
     const pendingDocuments = target.caseMode === 'respondent' ? (target.receivedDocuments || []).filter((item) => !item.analyzed) : []
     if (!active) {
       setConversations((current) => [target, ...current])
@@ -231,8 +244,8 @@ export default function App() {
     }
     const userMessage = makeMessage('user', pendingDocuments.length ? `${text}\n\n첨부 문서: ${pendingDocuments.map((item) => item.name).join(', ')}` : text)
     const messagesForAi = [
-      ...target.messages.map((message) => message.id === followUpSubmission?.messageId
-        ? { ...message, followUpSubmitted: true, followUpAnswers: followUpSubmission.answers }
+      ...target.messages.map((message) => message.id === effectiveFollowUpSubmission?.messageId
+        ? { ...message, followUpSubmitted: true, followUpAnswers: effectiveFollowUpSubmission.answers }
         : message),
       userMessage,
     ]
@@ -240,8 +253,8 @@ export default function App() {
       ...conversation,
       title: conversation.title === '새 대화' ? titleFrom(text) : conversation.title,
       messages: [
-        ...conversation.messages.map((message) => message.id === followUpSubmission?.messageId
-          ? { ...message, followUpSubmitted: true, followUpAnswers: followUpSubmission.answers }
+        ...conversation.messages.map((message) => message.id === effectiveFollowUpSubmission?.messageId
+          ? { ...message, followUpSubmitted: true, followUpAnswers: effectiveFollowUpSubmission.answers }
           : message),
         userMessage,
       ],
@@ -254,8 +267,8 @@ export default function App() {
       if (pendingDocuments.length && !documentInput?.text.trim() && !documentInput?.images.length) {
         throw new Error('첨부 파일에서 읽을 수 있는 글자나 페이지 이미지를 추출하지 못했습니다. PDF가 열리는지 확인하거나 JPG·PNG 이미지로 다시 첨부해주세요.')
       }
-      const submittedAnswers = followUpSubmission?.answers || {}
-      const submittedCard = followUpSubmission && target.messages.find((message) => message.id === followUpSubmission.messageId)
+      const submittedAnswers = effectiveFollowUpSubmission?.answers || {}
+      const submittedCard = effectiveFollowUpSubmission && target.messages.find((message) => message.id === effectiveFollowUpSubmission.messageId)
       const submittedQuestion = submittedCard?.followUpQuestions?.find((question) => question.id in submittedAnswers)
       const submittedAnswer = submittedQuestion && submittedAnswers[submittedQuestion.id]
       const intakeSubmission = submittedQuestion && submittedAnswer
@@ -263,7 +276,7 @@ export default function App() {
         : undefined
       let precedentsForAi = target.precedents
       let automaticSearchQuery = ''
-      if (!precedentsForAi.length) {
+      if (!precedentsForAi.length && !intakeSubmission) {
         const caseContext = [
           text,
           documentInput?.text,
@@ -307,19 +320,19 @@ export default function App() {
           changedDraftFields[key] = assistantMessage.id
         }
       }
-      setTypingMessageId(assistantMessage.id)
+      setTypingMessageId(result.instant ? null : assistantMessage.id)
       if (Object.keys(changedDraftFields).length > 0) {
         setAnimatedDraftFields((current) => ({ ...current, ...changedDraftFields }))
       }
       updateConversation(target.id, (conversation) => ({
         ...conversation,
         messages: [...conversation.messages, assistantMessage],
-        draft: { ...conversation.draft, ...result.draftPatch },
+        draft: { ...conversation.draft, ...result.draftPatch, selections: { ...conversation.draft.selections, ...result.draftPatch.selections } },
         responseDraft: { ...blankResponseDraft(), ...conversation.responseDraft, ...result.responsePatch },
         receivedDocuments: (conversation.receivedDocuments || []).map((item) => pendingDocuments.some((pending) => pending.id === item.id) ? { ...item, analyzed: true } : item),
         updatedAt: Date.now(),
       }))
-      if ((!active || activeId === target.id) && target.caseMode !== 'respondent' && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
+      if ((!active || activeId === target.id) && target.caseMode !== 'respondent' && !result.instant && Object.keys(result.draftPatch).length > 0) setPreviewOpen(true)
       if ((!active || activeId === target.id) && target.caseMode === 'respondent' && Object.keys(result.responsePatch || {}).length > 0) setPreviewOpen(true)
       if (result.searchQuery && !precedentsForAi.length && result.searchQuery !== automaticSearchQuery) {
         try {
@@ -356,9 +369,9 @@ export default function App() {
     }))
   }
 
-  function submitFollowUp(message: ChatMessage) {
+  function submitFollowUp(message: ChatMessage, submittedAnswers?: Record<string, FollowUpAnswer>) {
     const questions: FollowUpQuestion[] = message.followUpQuestions || []
-    const answers = message.followUpAnswers || {}
+    const answers = submittedAnswers || message.followUpAnswers || {}
     const complete = questions.length > 0 && questions.every((question) => question.answerType === 'text'
       ? Boolean(answers[question.id]?.text?.trim())
       : Boolean(answers[question.id]?.choice))
@@ -517,7 +530,7 @@ export default function App() {
                 busy={busy}
                 animateQuestions={completedTypingId === message.id}
                 onAnswer={(questionId, answer) => updateFollowUpAnswer(message.id, questionId, answer)}
-                onSubmit={() => submitFollowUp(message)}
+                onSubmit={(answers) => submitFollowUp(message, answers)}
               />}
             </div>
           </div>)}

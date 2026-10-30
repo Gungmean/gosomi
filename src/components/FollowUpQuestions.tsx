@@ -18,12 +18,13 @@ export default function FollowUpQuestions({
   busy: boolean
   animateQuestions?: boolean
   onAnswer: (questionId: string, answer: FollowUpAnswer) => void
-  onSubmit: () => void
+  onSubmit: (answers?: Record<string, FollowUpAnswer>) => void
 }) {
   const complete = questions.every((question) => question.answerType === 'text'
     ? Boolean(answers[question.id]?.text?.trim())
     : Boolean(answers[question.id]?.choice))
   const shouldType = animateQuestions && !submitted
+  const submitOnChoice = questions.length === 1 && questions[0].answerType === 'yes_no' && !questions[0].detailPrompt
 
   return <motion.section
     className={`followup-card${submitted ? ' submitted' : ''}`}
@@ -66,7 +67,13 @@ export default function FollowUpQuestions({
               className={answer.choice === choice ? 'selected' : ''}
               aria-pressed={answer.choice === choice}
               disabled={submitted || busy}
-              onClick={() => onAnswer(question.id, { ...answer, choice })}
+              onClick={() => {
+                const nextAnswer = { ...answer, choice }
+                onAnswer(question.id, nextAnswer)
+                if (questions.length === 1 && (choice !== 'yes' || !question.detailPrompt)) {
+                  onSubmit({ ...answers, [question.id]: nextAnswer })
+                }
+              }}
             >{label}</button>)}
           </div>}
           {needsDetail && <label className="followup-detail">
@@ -79,7 +86,7 @@ export default function FollowUpQuestions({
         </div>
       })}
     </div>
-    {!submitted && <button type="button" className="followup-submit" disabled={!complete || busy} onClick={onSubmit}>
+    {!submitted && !submitOnChoice && <button type="button" className="followup-submit" disabled={!complete || busy} onClick={() => onSubmit()}>
       답변 보내기 <ArrowUpRight size={16} />
     </button>}
   </motion.section>

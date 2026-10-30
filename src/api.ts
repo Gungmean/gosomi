@@ -17,7 +17,7 @@ export async function askAi(
   responseDraft?: ResponseDraft,
   documentInput?: DocumentInput,
   intakeSubmission?: { questionId: string; text?: string; choice?: 'yes' | 'no' | 'unknown' },
-): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; responsePatch?: Partial<ResponseDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string }> {
+): Promise<{ message: string; draftPatch: Partial<ComplaintDraft>; responsePatch?: Partial<ResponseDraft>; searchQuery: string; followUpQuestions: FollowUpQuestion[]; modelUsed?: string; instant?: boolean }> {
   let response: Response
   try {
     response = await fetch('/api/chat', {

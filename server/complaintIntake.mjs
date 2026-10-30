@@ -81,6 +81,23 @@ export function applyCurrentIntakeAnswer(draftPatch, draft, intakeSubmission) {
   return nextPatch
 }
 
+export function isSimpleIntakeSubmission(intakeSubmission) {
+  const field = String(intakeSubmission?.questionId || '')
+  if (!stepsByField.has(field)) return false
+  const choice = intakeSubmission?.choice
+  const answer = String(intakeSubmission?.text || '').trim()
+  if (choice === 'unknown') return true
+  if ((choice === 'yes' || choice === 'no') && !answer) return true
+  if (choice === 'yes' || choice === 'no') return false
+  if (isSkipAnswer(answer, field)) return true
+  // A short value for one form cell can be entered directly. Longer narratives
+  // still go through the model so details in other fields are not overlooked.
+  return answer.length > 0 && answer.length <= 50
+    && !/[\n?？]|(?:그리고|또한|하지만|그런데|참고로|추가로)/u.test(answer)
+    && !/[,.，、].{4,}/u.test(answer)
+    && !/(?:입니다|이에요|예요|아니라|수정|정정|바꿔|같아요)/u.test(answer)
+}
+
 export function nextComplaintIntakeQuestion(draft, messages) {
   const conversation = Array.isArray(messages) ? messages : []
   const latestUserText = [...conversation].reverse().find((message) => message?.role === 'user')?.text || ''

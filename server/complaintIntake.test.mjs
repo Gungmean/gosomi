@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nextComplaintIntakeQuestion, applyCurrentIntakeAnswer, alignMessageWithIntakeQuestion, complaintIntakeSteps } from './complaintIntake.mjs'
+import { nextComplaintIntakeQuestion, applyCurrentIntakeAnswer, alignMessageWithIntakeQuestion, isSimpleIntakeSubmission, complaintIntakeSteps } from './complaintIntake.mjs'
 const identity = ['complainantName','complainantAddress','complainantPhone','accusedName','accusedAddress','accusedPhone','accusedOnlineId','accusedAccount']
 const filled = () => ({ type:'fraud', ...Object.fromEntries([...identity,...complaintIntakeSteps.map(x=>x.field)].map(k=>[k,'확인됨'])), selections:{} })
 test('기본 사건 내용이 채워져도 유형별 질문은 계속된다',()=>{
@@ -23,4 +23,11 @@ test('질문 카드와 충돌하는 마지막 질문 안내를 답변에서 제�
  const message='고소장 초안이 업데이트되었습니다. 이제 마지막 질문입니다. (예: 사진, 영상, 기타 문서 등)'
  assert.equal(alignMessageWithIntakeQuestion(message,[{id:'accusedPhone'}]),'고소장 초안이 업데이트되었습니다.')
  assert.equal(alignMessageWithIntakeQuestion('내용을 반영했습니다. 이제 고소장 초안이 완성되었습니다.',[{id:'fraudMethod'}]),'내용을 반영했습니다.')
+})
+test('한 칸에 들어갈 짧은 답만 빠르게 처리한다',()=>{
+ assert.equal(isSimpleIntakeSubmission({questionId:'incidentDate',text:'2026년 10월 12일'}),true)
+ assert.equal(isSimpleIntakeSubmission({questionId:'fraudFamily',choice:'no'}),true)
+ assert.equal(isSimpleIntakeSubmission({questionId:'accusedAddress',text:'모름 / 건너뛰기'}),true)
+ assert.equal(isSimpleIntakeSubmission({questionId:'incidentSummary',text:'송금했고, 그런데 물건을 받지 못했습니다.'}),false)
+ assert.equal(isSimpleIntakeSubmission({questionId:'fraudFamily',choice:'yes',text:'친척이며 지난달에도 돈을 빌렸습니다.'}),false)
 })
