@@ -3,7 +3,7 @@ import { MotionConfig } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import {
   ArrowRight, BookOpen, FileText, History,
-  KeyRound, Menu, MessageCircle, MoreHorizontal, Plus,
+  KeyRound, Menu, MessageCircle, MoreHorizontal, Play, Plus,
   Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
 import { askAi, getAutomaticPrecedentQuery, searchPrecedents } from './api'
@@ -13,6 +13,7 @@ import ResponsePanel from './components/ResponsePanel'
 import ReceivedDocuments from './components/ReceivedDocuments'
 import FollowUpQuestions from './components/FollowUpQuestions'
 import PrecedentDialog from './components/PrecedentDialog'
+import DemoScenarioDialog from './components/DemoScenarioDialog'
 import SettingsDialog from './components/SettingsDialog'
 import { TypewriterMarkdown, WelcomeTypedHeading, useTypedPlaceholder } from './components/TypewriterText'
 import { isValidApiKeyFormat, loadConversations, loadSettings, saveConversations, saveSettings } from './storage'
@@ -54,6 +55,7 @@ export default function App() {
   const [settings, setSettings] = useState<AiSettings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [precedentOpen, setPrecedentOpen] = useState(false)
+  const [demoOpen, setDemoOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [input, setInput] = useState('')
@@ -427,11 +429,15 @@ export default function App() {
   }
 
   function selectDemoScenario(scenario: DemoScenario) {
-    setStartMode(scenario.mode)
-    setStartType(scenario.type)
-    setInput(scenario.prompt)
-    setPreviewOpen(false)
-    if (active && active.messages.length === 0) {
+    if (active && (active.messages.length > 0 || Boolean(active.receivedDocuments?.length))) {
+      newConversation(scenario.type, scenario.prompt, scenario.mode)
+    } else {
+      setStartMode(scenario.mode)
+      setStartType(scenario.type)
+      setInput(scenario.prompt)
+      setPreviewOpen(false)
+    }
+    if (active && active.messages.length === 0 && !active.receivedDocuments?.length) {
       updateConversation(active.id, (conversation) => ({
         ...conversation,
         caseMode: scenario.mode,
@@ -439,7 +445,7 @@ export default function App() {
         updatedAt: Date.now(),
       }))
     }
-    landingTextareaRef.current?.focus()
+    setDemoOpen(false)
   }
 
   return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
@@ -483,6 +489,7 @@ export default function App() {
         </div>
         <div className="topbar-actions">
           <button className="topbar-link" onClick={() => setPrecedentOpen(true)}><BookOpen size={18} /><span>판례 검색</span>{Boolean(active?.precedents.length) && <b>{active?.precedents.length}</b>}</button>
+          <button className="topbar-link" aria-label="가상 사례로 빠르게 체험" onClick={() => setDemoOpen(true)} disabled={busy || uploading}><Play size={17} /><span>빠른 체험</span></button>
           <button className="topbar-link topbar-preview" onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={18} /><span>{currentMode === 'respondent' ? '대응 메모' : '고소장 미리보기'}</span></button>
           <button className="topbar-avatar" onClick={() => setSettingsOpen(true)} aria-label="API 설정 열기"><KeyRound size={17} /></button>
         </div>
@@ -505,12 +512,6 @@ export default function App() {
               {([
                 ['fraud', '사기'], ['defamation', '모욕·명예훼손'], ['assault', '폭행'], ['general', '잘 모르겠어요'],
               ] as [ComplaintType, string][]).map(([type, label]) => <button key={type} className={startType === type ? 'selected' : ''} onClick={() => selectComplaintType(type)} aria-pressed={startType === type}>{label}</button>)}
-            </div>
-          </div>
-          <div className="demo-scenarios">
-            <div className="demo-scenarios-heading"><strong>가상 사례로 빠르게 체험</strong><span>선택하면 아래 입력창에 채워집니다. 전송 전에 수정할 수 있어요.</span></div>
-            <div className="demo-scenarios-options">
-              {demoScenarios.map((scenario) => <button key={scenario.id} type="button" className={input === scenario.prompt ? 'selected' : ''} aria-pressed={input === scenario.prompt} onClick={() => selectDemoScenario(scenario)}>{scenario.label}</button>)}
             </div>
           </div>
           {startMode === 'respondent' && <ReceivedDocuments documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}
@@ -585,6 +586,7 @@ export default function App() {
       ? <ResponsePanel draft={responseDraft} open={previewOpen} onOpen={() => { ensureConversation(startType, 'respondent'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateResponseDraft} />
       : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
+    <DemoScenarioDialog open={demoOpen} onOpenChange={setDemoOpen} onSelect={selectDemoScenario} />
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}
   </div></MotionConfig>
