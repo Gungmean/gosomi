@@ -251,6 +251,9 @@ export default function App() {
     setBusy(true)
     try {
       const documentInput = pendingDocuments.length ? await prepareDocumentInput(pendingDocuments) : undefined
+      if (pendingDocuments.length && !documentInput?.text.trim() && !documentInput?.images.length) {
+        throw new Error('첨부 파일에서 읽을 수 있는 글자나 페이지 이미지를 추출하지 못했습니다. PDF가 열리는지 확인하거나 JPG·PNG 이미지로 다시 첨부해주세요.')
+      }
       const submittedAnswers = followUpSubmission?.answers || {}
       const submittedCard = followUpSubmission && target.messages.find((message) => message.id === followUpSubmission.messageId)
       const submittedQuestion = submittedCard?.followUpQuestions?.find((question) => question.id in submittedAnswers)

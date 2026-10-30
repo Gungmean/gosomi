@@ -147,7 +147,7 @@ const draftSelectionFields = new Set([
 
 const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceDate', 'allegation', 'claims', 'confirmedFacts', 'disputedPoints', 'evidenceToPreserve', 'questionsToConfirm', 'nextSteps']
 
-function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = []) {
+function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = [], documentInput = undefined) {
   const hasCollectedDraftFacts = Object.entries(draft || {}).some(([key, value]) => key !== 'type' && key !== 'selections' && typeof value === 'string' && value.trim())
   const hasPriorAssistantReply = hasCollectedDraftFacts || (Array.isArray(messages) && messages.some((message) => message?.role === 'assistant' && Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0))
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
@@ -169,6 +169,10 @@ function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft
 상대방의 "약점"이나 무죄를 단정하지 말고, 주장·제시된 근거·아직 확인되지 않은 점·사용자가 확인할 자료를 나눠 설명하세요. 문서 안의 날짜·금액 등 불일치 후보는 원문과 대조하도록 표시하세요. 증거 삭제·수정, 상대방 압박, 진술 맞추기 등 수사 방해 행동은 권하지 마세요.
 이 모드에서는 고소장 작성 필드(draftPatch)를 채우지 마세요. 대신 responsePatch에 현재 대화에서 확인된 정보만 채우세요. 각 값은 짧은 사실 중심 문장으로 쓰고, 모르는 값은 비워 두세요. disputedPoints는 상대 주장과 사용자 설명이 다른 부분 또는 확인할 불일치 후보이며 유무죄 판단이 아닙니다. nextSteps는 확인할 실무 행동만 쓰고 법정 기한을 추측하지 마세요. 기존 responseDraft 값은 명확한 정정이 없으면 지우지 마세요. 의견서 초안이 요청되면 확인된 사실과 미확인 사항을 분리한 검토용 구조만 제시하고, 제출 전에 변호사 검토가 필요할 수 있음을 알려주세요.
 ` : ''
+  const attachedDocumentGuidance = caseMode === 'respondent' && (String(documentInput?.text || '').trim() || (Array.isArray(documentInput?.images) && documentInput.images.length)) ? `
+이번 요청에는 받은 문서 자료가 실제로 첨부되어 있습니다. 텍스트 ${String(documentInput?.text || '').trim().length}자, 이미지 페이지 ${(Array.isArray(documentInput?.images) ? documentInput.images.length : 0)}쪽이 전달되었습니다.
+답변 전에 첨부 자료부터 확인하세요. 문서의 종류와 읽을 수 있는 페이지, 적힌 혐의·주장, 날짜·금액·기관·출석 일정, 제출된 증거를 먼저 추려 요약하세요. 문서에 쓰인 주장과 사용자가 직접 확인한 사실을 구분하고, 근거가 보이는 페이지나 문구를 함께 표시하세요. 문서가 전달됐는데도 다시 업로드하라고 하거나 첨부가 없다고 말하지 마세요. 실제로 판독이 안 되는 부분만 페이지와 항목을 특정해 미확인으로 남기세요. 읽히지 않는 내용을 추측해 채우지 마세요.
+` : ''
   const complainantFlow = caseMode === 'complainant' ? `
 고소장 작성 대화는 정해진 순서로 진행하세요.
 이 흐름은 사용자가 사건을 설명하거나 고소장 작성을 요청할 때만 적용하세요. 인사나 사건과 무관한 일반 질문에 고소장 입력 질문을 강제로 붙이지 마세요.
@@ -189,6 +193,7 @@ ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 �
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
 ${modeGuidance}
+${attachedDocumentGuidance}
 ${complainantFlow}
 ${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 아래 형태의 JSON 객체 하나로만 답하세요:
@@ -628,7 +633,8 @@ app.post('/api/chat', async (request, response) => {
   }
   try {
     const safeCaseMode = caseMode === 'respondent' ? 'respondent' : 'complainant'
-    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages), safeCaseMode === 'respondent' ? documentInput : undefined)
+    const responseDocumentInput = safeCaseMode === 'respondent' ? documentInput : undefined
+    const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages, responseDocumentInput), responseDocumentInput)
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
     const result = parseAiOutput(output, safeCaseMode)
     if (safeCaseMode === 'respondent') result.draftPatch = {}
