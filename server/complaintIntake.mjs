@@ -114,7 +114,9 @@ export function alignMessageWithIntakeQuestion(message, questions) {
     const text = sentence.trim()
     if (!text) return false
     if (/[?？]|(?:인가요|나요|까요|습니까|습니까요|주시겠어요|알려주세요|말씀해주세요)[.!。！？]?$/u.test(text)) return false
-    if (/(?:다음(?:으로|은|에)|확인할\s*(?:사항|항목|내용)|다음\s*질문)/u.test(text)) return false
+    if (/(?:다음(?:으로|은|에)|확인할\s*(?:사항|항목|내용)|(?:마지막|다음|추가)\s*(?:확인\s*)?질문)/u.test(text)) return false
+    if (/(?:고소장|초안).*(?:완성|모두\s*채워|마무리)/u.test(text)) return false
+    if (/^[（(]\s*예[:：]/u.test(text)) return false
     if (currentFieldPattern?.test(text) && /(?:초안|고소장).*(?:기재|반영|작성|입력|적어|넣)/u.test(text)) return false
     return true
   })

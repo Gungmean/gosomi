@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { nextComplaintIntakeQuestion, applyCurrentIntakeAnswer, complaintIntakeSteps } from './complaintIntake.mjs'
+import { nextComplaintIntakeQuestion, applyCurrentIntakeAnswer, alignMessageWithIntakeQuestion, complaintIntakeSteps } from './complaintIntake.mjs'
 const identity = ['complainantName','complainantAddress','complainantPhone','accusedName','accusedAddress','accusedPhone','accusedOnlineId','accusedAccount']
 const filled = () => ({ type:'fraud', ...Object.fromEntries([...identity,...complaintIntakeSteps.map(x=>x.field)].map(k=>[k,'확인됨'])), selections:{} })
 test('기본 사건 내용이 채워져도 유형별 질문은 계속된다',()=>{
@@ -18,4 +18,9 @@ test('건너뛴 빈칸을 다시 묻지 않는다',()=>{
  const messages=[{role:'assistant',followUpSubmitted:true,followUpQuestions:[{id:'complainantName'}],followUpAnswers:{complainantName:{text:'모름 / 건너뛰기'}}}]
  assert.equal(nextComplaintIntakeQuestion(draft,messages)[0].id,'fraudMethod')
  assert.equal(applyCurrentIntakeAnswer({}, {}, {questionId:'complainantName',text:'모름 / 건너뛰기'}).complainantName,undefined)
+})
+test('질문 카드와 충돌하는 마지막 질문 안내를 답변에서 제거한다',()=>{
+ const message='고소장 초안이 업데이트되었습니다. 이제 마지막 질문입니다. (예: 사진, 영상, 기타 문서 등)'
+ assert.equal(alignMessageWithIntakeQuestion(message,[{id:'accusedPhone'}]),'고소장 초안이 업데이트되었습니다.')
+ assert.equal(alignMessageWithIntakeQuestion('내용을 반영했습니다. 이제 고소장 초안이 완성되었습니다.',[{id:'fraudMethod'}]),'내용을 반영했습니다.')
 })
