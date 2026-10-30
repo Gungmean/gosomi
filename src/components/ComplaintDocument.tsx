@@ -90,7 +90,7 @@ function OfficialComplaint({
         complainantName: { left: '43%', top: '91.2%', width: '37%' },
         incidentPlace: { left: '36%', top: '8.7%', width: '52%' },
         incidentSummary: { left: '36%', top: '12%', width: '51.5%', height: '3.2%', size: '1.45cqw' },
-        damage: { left: '42%', top: '16.4%', width: '32%' },
+        damage: { left: '42%', top: '15.9%', width: '32%' },
       },
     },
     defamation: {
