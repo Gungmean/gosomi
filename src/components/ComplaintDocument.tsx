@@ -10,6 +10,10 @@ const officialPages: Record<Exclude<ComplaintType, 'general'>, [string, string]>
   assault: ['/forms/official/print-08.png', '/forms/official/print-09.png'],
 }
 
+function fraudAmountForForm(damage: string) {
+  return damage.match(/(\d[\d,]*(?:\.\d+)?\s*(?:억|천만|백만|십만|만|천|백)?)(?=\s*원)/u)?.[1].replace(/\s+/g, '') || ''
+}
+
 function needsSupplementalPage(draft: ComplaintDraft) {
   if (draft.type === 'general') return false
   if (draft.type === 'assault') return Boolean(draft.incidentSummary || draft.damage || draft.evidence || draft.reason || draft.request || draft.relatedCase)
@@ -21,6 +25,7 @@ function needsSupplementalPage(draft: ComplaintDraft) {
   ]
   return Boolean(
     draft.reason || draft.evidence || draft.request || draft.relatedCase ||
+    (draft.type === 'fraud' && draft.damage && !fraudAmountForForm(draft.damage) && !/모름|알 수 없|불명/u.test(draft.damage)) ||
     /예금주|명의자/u.test(draft.accusedAccount) ||
     singleLineFields.some(([value, limit]) => String(value).length > Number(limit)) ||
     (draft.incidentSummary && draft.incidentSummary.length > 30) ||
@@ -84,8 +89,8 @@ function OfficialComplaint({
       second: {
         complainantName: { left: '43%', top: '91.2%', width: '37%' },
         incidentPlace: { left: '36%', top: '8.7%', width: '52%' },
-        incidentSummary: { left: '36%', top: '11.5%', width: '51.5%', height: '3.9%', size: '1.45cqw' },
-        damage: { left: '40%', top: '17.4%', width: '36%' },
+        incidentSummary: { left: '36%', top: '12%', width: '51.5%', height: '3.2%', size: '1.45cqw' },
+        damage: { left: '42%', top: '16.4%', width: '32%' },
       },
     },
     defamation: {
@@ -142,7 +147,7 @@ function OfficialComplaint({
     incidentPlace: draft.incidentPlace,
     incidentSummary: draft.incidentSummary,
     assaultBodyPart: draft.selections.assaultBodyPart || '',
-    damage: draft.damage,
+    damage: type === 'fraud' ? fraudAmountForForm(draft.damage) : draft.damage,
     request: draft.request,
     evidence: draft.evidence,
   }
@@ -199,6 +204,8 @@ function OfficialComplaint({
   const secondMarks: Position[] = []
   const addMark = (target: Position[], left: number, top: number) => target.push({ left: `${left}%`, top: `${top}%`, width: '2.3%', height: '1.6%' })
   if (type === 'fraud') {
+    if (fraudAmountForForm(draft.damage)) addMark(secondMarks, 37.1, 16.3)
+    else if (/모름|알 수 없|불명/u.test(draft.damage)) addMark(secondMarks, 37.1, 18.5)
     const fraudMarks: Record<string, [number, number]> = {
       회원모집: [37.8, 64.5], 알선빙자: [37.8, 67], 부동산: [37.8, 69.5], 신용카드: [59.7, 69.5],
       공사대금: [37.8, 72.2], 물품대금: [59.7, 72.2], 기타용역: [37.8, 74.5], 일반매매: [59.7, 74.5],
