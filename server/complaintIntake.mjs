@@ -1,3 +1,5 @@
+import { typeQuestions, checklistQuestions } from '../shared/formQuestions.mjs'
+
 export const complaintIntakeSteps = [
   { field: 'incidentDate', text: '사건이 발생한 날짜를 알고 계신가요? 연·월·일 중 기억나는 범위만 적어도 됩니다.' },
   { field: 'incidentTime', text: '사건이 발생한 시간대를 기억하시나요? 정확한 시각을 모르면 건너뛰어도 됩니다.' },
@@ -10,11 +12,27 @@ export const complaintIntakeSteps = [
   { field: 'relatedCase', text: '같은 사건으로 신고·수사·재판이 진행 중이거나 접수한 적이 있나요? 모르면 건너뛰어도 됩니다.' },
 ]
 
-const stepsByField = new Map(complaintIntakeSteps.map((step) => [step.field, step]))
+const identitySteps = [
+  ['complainantName', '고소인의 성명을 알려주세요. 직접 입력하거나 건너뛰어도 됩니다.'],
+  ['complainantAddress', '고소인의 주소를 알려주세요. 미리보기에서 직접 입력하거나 건너뛰어도 됩니다.'],
+  ['complainantPhone', '고소인의 연락처를 알려주세요. 직접 입력하거나 건너뛰어도 됩니다.'],
+  ['accusedName', '상대방의 성명을 알고 계신가요? 모르면 건너뛰어도 됩니다.'],
+  ['accusedAddress', '알고 있는 상대방 주소가 있나요? 모르면 건너뛰어도 됩니다.'],
+  ['accusedPhone', '알고 있는 상대방 연락처가 있나요?'],
+  ['accusedOnlineId', '상대방의 아이디나 닉네임을 알고 계신가요?'],
+  ['accusedAccount', '상대방 계좌 정보를 알고 계신가요? 모르면 건너뛰어도 됩니다.'],
+].map(([field, text]) => ({ field, text }))
+const selectionSteps = Object.fromEntries(Object.keys(typeQuestions).map(type => [type, [
+  ...typeQuestions[type].map(item => ({ field: item.id, text: `${item.label}을 알려주세요. ${item.options.join(' / ')}`, selection: true })),
+  ...(type === 'assault' ? [{ field: 'assaultBodyPart', text: '폭행을 당한 부위를 알려주세요.', selection: true }] : []),
+  ...checklistQuestions[type].map(item => ({ field: item.id, text: item.label, selection: true, answerType: 'yes_no' })),
+]]))
+const stepsByField = new Map([...identitySteps, ...complaintIntakeSteps, ...Object.values(selectionSteps).flat()].map((step) => [step.field, step]))
 
 function isSkipAnswer(value, field) {
   const text = String(value || '').trim().toLowerCase().replace(/[.!。！？?\s]/g, '')
   if (!text) return true
+  if (text === '모름/건너뛰기') return true
   if (/^(모름|잘모르겠어요|잘모르겠습니다|모르겠어요|모르겠습니다|건너뛰기|건너뛸게요|나중에직접입력|아직정하지않았어요|아직정하지않았습니다|정하지않았어요|정하지않았습니다|skip|unknown|없음|없어요|없습니다|해당없음)$/.test(text)) return true
   if (field === 'evidence' && /^(증거|증거자료|자료)(는|가)?(없어요|없습니다|없음)$/.test(text)) return true
   if (field === 'relatedCase' && /^(신고|수사|재판|접수한적)(는|가)?(없어요|없습니다|없음)$/.test(text)) return true
@@ -46,12 +64,19 @@ export function collectSubmittedIntake(messages) {
   return { answeredFields: new Set(answers.keys()) }
 }
 
+function answerChoiceValue(answer, value) {
+  return answer?.choice === 'yes' ? '예' : answer?.choice === 'no' ? '아니오' : answer?.choice === 'unknown' ? '모름' : value
+}
+
 export function applyCurrentIntakeAnswer(draftPatch, draft, intakeSubmission) {
   const field = String(intakeSubmission?.questionId || '')
   if (!stepsByField.has(field)) return draftPatch
   const value = valueForAnswer(field, { text: intakeSubmission?.text, choice: intakeSubmission?.choice })
   const nextPatch = { ...draftPatch }
-  if (value) nextPatch[field] = value
+  if (stepsByField.get(field).selection) {
+    const selectionValue = answerChoiceValue(intakeSubmission, value)
+    nextPatch.selections = { ...draft?.selections, ...nextPatch.selections, [field]: selectionValue }
+  } else if (value) nextPatch[field] = value
   else if (!String(draft?.[field] || '').trim()) delete nextPatch[field]
   return nextPatch
 }
@@ -62,11 +87,13 @@ export function nextComplaintIntakeQuestion(draft, messages) {
   const describesCase = /고소장.{0,8}(작성|초안)|고소.{0,8}(하고 싶|하려)|피해|사건|사기|폭행|명예훼손|모욕|경찰.{0,8}(연락|신고)|돈을 보냈|이체|계약/.test(latestUserText) || latestUserText.trim().length >= 70
   const submitted = collectSubmittedIntake(conversation)
   const hasSubmittedIntake = conversation.some((message) => message?.role === 'assistant' && message.followUpSubmitted && (message.followUpQuestions || []).some((question) => stepsByField.has(question?.id)))
-  if (!describesCase && !hasSubmittedIntake) return null
+  const hasDraft = complaintIntakeSteps.some(step => String(draft?.[step.field] || '').trim())
+  if (!describesCase && !hasSubmittedIntake && !hasDraft) return null
 
-  const next = complaintIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !submitted.answeredFields.has(step.field))
+  const steps = [...identitySteps, ...complaintIntakeSteps, ...(selectionSteps[draft?.type] || [])]
+  const next = steps.find((step) => !String((step.selection ? draft?.selections?.[step.field] : draft?.[step.field]) || '').trim() && !submitted.answeredFields.has(step.field))
   if (!next) return null
-  return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
+  return [{ id: next.field, text: next.text, answerType: next.answerType || 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
 }
 
 export function alignMessageWithIntakeQuestion(message, questions) {

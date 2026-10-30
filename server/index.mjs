@@ -705,7 +705,7 @@ app.post('/api/chat', async (request, response) => {
     else {
       result.responsePatch = {}
       result.draftPatch = applyCurrentIntakeAnswer(result.draftPatch, draft, intakeSubmission)
-      result.followUpQuestions = nextComplaintIntakeQuestion({ ...draft, ...result.draftPatch }, messages) || []
+      result.followUpQuestions = nextComplaintIntakeQuestion({ ...draft, ...result.draftPatch, selections: { ...draft?.selections, ...result.draftPatch.selections } }, messages) || []
       result.message = alignMessageWithIntakeQuestion(result.message, result.followUpQuestions)
     }
     if (typeof providerOutput !== 'string') {
