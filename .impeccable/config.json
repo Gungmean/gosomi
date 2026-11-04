@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-11-04T14:26:43.147Z",
+        "reason": "Existing implementation (attribution unknown): Arial is scoped to the official police-form checkmark glyph overlay; app text uses Pretendard and document text uses Malgun Gothic/Pretendard."
+      }
+    ]
+  }
+}

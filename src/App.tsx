@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type CSSProperties } from 'react'
 import { MotionConfig } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import {
   ArrowRight, BookOpen, FileText, History, Mic, MicOff,
   KeyRound, Menu, MessageCircle, MoreHorizontal, Play, Plus,
-  Send, ShieldCheck, Trash2, X,
+  RotateCcw, Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
 import { askAi, getAutomaticPrecedentQuery, searchPrecedents } from './api'
 import { demoScenarios, type DemoScenario } from './demoScenarios'
@@ -69,6 +69,7 @@ export default function App() {
   const [precedentOpen, setPrecedentOpen] = useState(false)
   const [demoOpen, setDemoOpen] = useState(false)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewWidth, setPreviewWidth] = useState(() => Math.min(600, Math.max(420, Math.round(window.innerWidth * 0.33))))
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [input, setInput] = useState('')
   const [startType, setStartType] = useState<ComplaintType>(() => findRestorableConversation()?.draft?.type || 'general')
@@ -85,6 +86,7 @@ export default function App() {
   const landingTextareaRef = useRef<HTMLTextAreaElement>(null)
   const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
   const voiceInputBaseRef = useRef('')
+  const resizingPreviewRef = useRef(false)
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
   const responseDraft = active?.responseDraft || blankResponseDraft()
@@ -200,7 +202,8 @@ export default function App() {
       : active.messages.length > 0 && (active.draft.type !== 'general' ||
       Object.entries(active.draft).some(([key, value]) =>
         key !== 'type' && key !== 'selections' && typeof value === 'string' && Boolean(value.trim())))
-    setPreviewOpen(hasDraftContent)
+    if (hasDraftContent) setPreviewOpen(true)
+    else if (active.messages.length > 0 || Boolean(active.receivedDocuments?.length)) setPreviewOpen(false)
   }, [activeId])
   useEffect(() => {
     if (!notice) return
@@ -293,6 +296,7 @@ export default function App() {
   async function handleSend(
     messageText?: string,
     followUpSubmission?: { messageId: string; answers: Record<string, FollowUpAnswer> },
+    retryFailedMessageId?: string,
   ) {
     const text = (messageText ?? input).trim()
     if (!text || busy || uploading) return
@@ -325,7 +329,12 @@ export default function App() {
       if (!window.confirm('답변을 위해 대화 내용과 선택한 첨부 문서가 외부 AI 제공자에게 전송됩니다. 개인정보를 가리고 계속할까요?')) return
     }
     const target = active || createConversation(startType, startMode)
-    const latestAssistant = [...target.messages].reverse().find((message) => message.role === 'assistant')
+    const failedMessageIndex = retryFailedMessageId
+      ? target.messages.findIndex((message) => message.id === retryFailedMessageId && message.role === 'assistant' && message.text.startsWith('연결에 문제가 생겼어요.'))
+      : -1
+    const retrying = failedMessageIndex >= 0
+    const contextMessages = retrying ? target.messages.slice(0, failedMessageIndex) : target.messages
+    const latestAssistant = [...contextMessages].reverse().find((message) => message.role === 'assistant')
     const pendingChoiceCard = !followUpSubmission && target.caseMode !== 'respondent'
       && latestAssistant && !latestAssistant.followUpSubmitted
       && latestAssistant.followUpQuestions?.length === 1 && latestAssistant.followUpQuestions[0].answerType === 'yes_no'
@@ -339,21 +348,21 @@ export default function App() {
       setConversations((current) => [target, ...current])
       setActiveId(target.id)
     }
-    const userMessage = makeMessage('user', pendingDocuments.length ? `${text}\n\n첨부 문서: ${pendingDocuments.map((item) => item.name).join(', ')}` : text)
+    const userMessage = retrying ? undefined : makeMessage('user', pendingDocuments.length ? `${text}\n\n첨부 문서: ${pendingDocuments.map((item) => item.name).join(', ')}` : text)
     const messagesForAi = [
-      ...target.messages.map((message) => message.id === effectiveFollowUpSubmission?.messageId
+      ...contextMessages.map((message) => message.id === effectiveFollowUpSubmission?.messageId
         ? { ...message, followUpSubmitted: true, followUpAnswers: effectiveFollowUpSubmission.answers }
         : message),
-      userMessage,
     ]
+    if (userMessage) messagesForAi.push(userMessage)
     updateConversation(target.id, (conversation) => ({
       ...conversation,
       title: conversation.title === '새 대화' ? titleFrom(text) : conversation.title,
       messages: [
-        ...conversation.messages.map((message) => message.id === effectiveFollowUpSubmission?.messageId
+        ...(retrying ? contextMessages : conversation.messages).map((message) => message.id === effectiveFollowUpSubmission?.messageId
           ? { ...message, followUpSubmitted: true, followUpAnswers: effectiveFollowUpSubmission.answers }
           : message),
-        userMessage,
+        ...(userMessage ? [userMessage] : []),
       ],
       updatedAt: Date.now(),
     }))
@@ -541,7 +550,12 @@ export default function App() {
     setDemoOpen(false)
   }
 
-  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`}>
+  const previewResizeMax = Math.min(600, Math.floor(window.innerWidth * 0.44))
+  const adjustPreviewWidth = (clientX: number) => {
+    setPreviewWidth(Math.max(380, Math.min(previewResizeMax, window.innerWidth - clientX)))
+  }
+
+  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`} style={{ '--preview-width': `${previewWidth}px` } as CSSProperties}>
     <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
         <button className="brand" onClick={() => { setActiveId(null); setPreviewOpen(false); setSidebarOpen(false) }} aria-label="고소미 홈으로">
@@ -556,7 +570,7 @@ export default function App() {
         {orderedConversations.map((conversation, index) => <div key={conversation.id}>
           {(index === 0 || dateLabel(orderedConversations[index - 1].updatedAt) !== dateLabel(conversation.updatedAt)) && <div className="conversation-date">{dateLabel(conversation.updatedAt)}</div>}
           <div className={`conversation-item ${activeId === conversation.id ? 'selected' : ''}`}>
-              <button className="conversation-select" onClick={() => { setActiveId(conversation.id); setStartType(conversation.draft.type); setStartMode(conversation.caseMode || 'complainant'); setSidebarOpen(false) }}>
+              <button className="conversation-select" onClick={() => { setPreviewOpen(false); setActiveId(conversation.id); setStartType(conversation.draft.type); setStartMode(conversation.caseMode || 'complainant'); setSidebarOpen(false) }}>
               <MessageCircle size={17} /><span>{conversation.caseMode === 'respondent' ? '대응 · ' : '작성 · '}{conversation.title}</span>
             </button>
             <div className="conversation-actions">
@@ -622,7 +636,7 @@ export default function App() {
           <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '첨부 문서를 분석하면 내용이 선택한 AI 제공자에게 전송됩니다. 이름·주소·사건번호 등은 먼저 가려주세요.' : '대화와 초안은 이 브라우저에 저장됩니다. 전송 시 선택한 AI 제공자에게 전달되며, 답변은 검토용입니다.'} 음성 인식 중 음성이 브라우저 제공 서비스로 전송될 수 있습니다.</p>
         </div> : <div className="message-stream">
           <div className="stream-intro"><span>{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'}</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
-          {active.messages.map((message) => <div className={`message-row ${message.role}`} key={message.id}>
+          {active.messages.map((message, messageIndex) => <div className={`message-row ${message.role}`} key={message.id}>
             <div className="message-content-stack">
               <div className="message-bubble">
                 {message.role === 'assistant' && <span className="message-author">고소미</span>}
@@ -640,6 +654,10 @@ export default function App() {
                 ) : (
                   <div className="message-body"><ReactMarkdown>{message.text}</ReactMarkdown></div>
                 )}
+                {message.role === 'assistant' && message.id === active.messages[active.messages.length - 1]?.id && message.text.startsWith('연결에 문제가 생겼어요.') && messageIndex > 0 && <button className="message-retry" type="button" onClick={() => {
+                  const retryText = [...active.messages.slice(0, messageIndex)].reverse().find((item) => item.role === 'user')?.text
+                  if (retryText) void handleSend(retryText, undefined, message.id)
+                }} disabled={busy || uploading}><RotateCcw size={15} /> 다시 시도</button>}
                 <span className="message-time">{new Date(message.createdAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })}</span>
               </div>
               {message.role === 'assistant' && Boolean(message.followUpQuestions?.length) && typingMessageId !== message.id && <FollowUpQuestions
@@ -678,6 +696,24 @@ export default function App() {
     {currentMode === 'respondent'
       ? <ResponsePanel draft={responseDraft} open={previewOpen} onOpen={() => { ensureConversation(startType, 'respondent'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateResponseDraft} />
       : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
+    {previewOpen && <div
+      className="preview-resize-handle"
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="미리보기 패널 너비 조절"
+      aria-valuemin={380}
+      aria-valuemax={previewResizeMax}
+      aria-valuenow={previewWidth}
+      tabIndex={0}
+      onPointerDown={(event) => { resizingPreviewRef.current = true; event.currentTarget.setPointerCapture(event.pointerId) }}
+      onPointerMove={(event) => { if (resizingPreviewRef.current) adjustPreviewWidth(event.clientX) }}
+      onPointerUp={(event) => { resizingPreviewRef.current = false; event.currentTarget.releasePointerCapture(event.pointerId) }}
+      onPointerCancel={() => { resizingPreviewRef.current = false }}
+      onKeyDown={(event) => {
+        if (event.key === 'ArrowLeft') { event.preventDefault(); setPreviewWidth((width) => Math.min(previewResizeMax, width + 24)) }
+        if (event.key === 'ArrowRight') { event.preventDefault(); setPreviewWidth((width) => Math.max(380, width - 24)) }
+      }}
+    />}
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
     <DemoScenarioDialog open={demoOpen} onOpenChange={setDemoOpen} onSelect={selectDemoScenario} />
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />

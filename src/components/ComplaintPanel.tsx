@@ -118,7 +118,7 @@ export default function ComplaintPanel({
                 <Tabs.Trigger value="edit"><Pencil size={16} /> 내용 수정</Tabs.Trigger>
               </Tabs.List>
               <Tabs.Content value="preview" className="panel-content panel-preview-scroll">
-                <div className="preview-notice"><span className="preview-notice-dot" /> 실시간 초안 {draft.type !== 'general' ? <a href={officialFormSource} target="_blank" rel="noreferrer">경찰청 원본 양식 보기</a> : <span className="preview-form-caveat">일반 초안 · 공식 서식과 다름</span>}</div>
+                <div className="preview-notice"><span className="preview-notice-dot" /> 실시간 초안 {draft.type !== 'general' ? <a href={officialFormSource} target="_blank" rel="noreferrer">경찰청 원본 양식 보기</a> : <span className="preview-form-caveat">일반 초안 · 공식 서식과 다름</span>}<button className="preview-edit-cue" type="button" onClick={() => setTab('edit')}><Pencil size={14} /> 내용 수정</button></div>
                 <ComplaintDocument draft={draft} animatedFields={animatedFields} onFieldClick={jumpToField} />
               </Tabs.Content>
               <Tabs.Content value="edit" className="panel-content panel-edit-scroll">
