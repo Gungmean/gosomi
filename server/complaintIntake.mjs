@@ -12,6 +12,10 @@ export const complaintIntakeSteps = [
   { field: 'relatedCase', text: '같은 사건으로 신고·수사·재판이 진행 중이거나 접수한 적이 있나요? 모르면 건너뛰어도 됩니다.' },
 ]
 
+export const MAX_INTAKE_QUESTIONS = 3
+const coreIntakeFields = new Set(['incidentDate', 'incidentPlace', 'incidentSummary', 'damage', 'evidence'])
+const coreIntakeSteps = complaintIntakeSteps.filter((step) => coreIntakeFields.has(step.field))
+
 const identitySteps = [
   ['complainantName', '고소인의 성명을 알려주세요. 직접 입력하거나 건너뛰어도 됩니다.'],
   ['complainantAddress', '고소인의 주소를 알려주세요. 미리보기에서 직접 입력하거나 건너뛰어도 됩니다.'],
@@ -53,15 +57,17 @@ function valueForAnswer(field, answer) {
 
 export function collectSubmittedIntake(messages) {
   const answers = new Map()
+  let questionCount = 0
   for (const message of Array.isArray(messages) ? messages : []) {
     if (message?.role !== 'assistant' || !message.followUpSubmitted) continue
     for (const question of message.followUpQuestions || []) {
       if (!stepsByField.has(question?.id)) continue
+      questionCount += 1
       const value = valueForAnswer(question.id, message.followUpAnswers?.[question.id] || {})
       answers.set(question.id, value)
     }
   }
-  return { answeredFields: new Set(answers.keys()) }
+  return { answeredFields: new Set(answers.keys()), questionCount }
 }
 
 function answerChoiceValue(answer, value) {
@@ -104,13 +110,38 @@ export function nextComplaintIntakeQuestion(draft, messages) {
   const describesCase = /고소장.{0,8}(작성|초안)|고소.{0,8}(하고 싶|하려)|피해|사건|사기|폭행|명예훼손|모욕|경찰.{0,8}(연락|신고)|돈을 보냈|이체|계약/.test(latestUserText) || latestUserText.trim().length >= 70
   const submitted = collectSubmittedIntake(conversation)
   const hasSubmittedIntake = conversation.some((message) => message?.role === 'assistant' && message.followUpSubmitted && (message.followUpQuestions || []).some((question) => stepsByField.has(question?.id)))
-  const hasDraft = complaintIntakeSteps.some(step => String(draft?.[step.field] || '').trim())
+  const hasDraft = [...coreIntakeFields].some((field) => String(draft?.[field] || '').trim())
   if (!describesCase && !hasSubmittedIntake && !hasDraft) return null
+  if (submitted.questionCount >= MAX_INTAKE_QUESTIONS) return null
 
-  const steps = [...identitySteps, ...complaintIntakeSteps, ...(selectionSteps[draft?.type] || [])]
+  // Ask only for core incident facts. Identity and legal-form checklist fields
+  // stay editable in the preview instead of turning the chat into a long form.
+  const steps = coreIntakeSteps
   const next = steps.find((step) => !String((step.selection ? draft?.selections?.[step.field] : draft?.[step.field]) || '').trim() && !submitted.answeredFields.has(step.field))
   if (!next) return null
   return [{ id: next.field, text: next.text, answerType: next.answerType || 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
+}
+
+const intakeFieldLabels = {
+  incidentDate: '사건 날짜', incidentPlace: '사건 장소', incidentSummary: '사건 경위', damage: '피해 내용', evidence: '관련 자료',
+}
+
+export function complaintIntakeProgressMessage(questionId, draft, skipped, questionCount) {
+  const label = intakeFieldLabels[questionId] || '이 항목'
+  const acknowledgement = skipped ? `${label}은 비워둘게요.` : `${label}을 초안에 반영했어요.`
+  return `${acknowledgement} 확인된 내용은 오른쪽 초안에 바로 반영됩니다. 이번 대화에서는 필요한 내용만 최대 ${MAX_INTAKE_QUESTIONS}개까지 확인해요. (${Math.min(questionCount, MAX_INTAKE_QUESTIONS)}/${MAX_INTAKE_QUESTIONS})`
+}
+
+export function complaintIntakeCompletionMessage(draft) {
+  const facts = [
+    ['언제', [draft?.incidentDate, draft?.incidentTime].filter(Boolean).join(' ')],
+    ['어디서', draft?.incidentPlace],
+    ['무슨 일', draft?.incidentSummary],
+    ['피해', draft?.damage],
+    ['자료', draft?.evidence],
+  ].filter(([, value]) => String(value || '').trim()).map(([label, value]) => `${label}: ${String(value).trim().slice(0, 180)}`)
+  const summary = facts.length ? facts.join(' · ') : '지금까지 알려주신 내용을 초안에 반영했어요.'
+  return `확인 질문은 여기서 마칠게요. 이번 대화에서 필요한 사건 내용은 정리했습니다.\n\n초안 요약: ${summary}\n\n오른쪽 고소장 미리보기에서 내용을 확인하고, 인적사항이나 더 필요한 내용은 직접 수정해 주세요.`
 }
 
 export function alignMessageWithIntakeQuestion(message, questions) {

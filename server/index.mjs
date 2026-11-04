@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, isSimpleIntakeSubmission, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
+import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, collectSubmittedIntake, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, MAX_INTAKE_QUESTIONS, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
 import { enrichAccusedAccount, extractAccusedIdentity } from './explicitFacts.mjs'
 
 const app = express()
@@ -166,6 +166,7 @@ const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceD
 
 function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = [], documentInput = undefined, demo = false) {
   const isDemoOpening = demo === true && !messages.some((message) => message?.role === 'assistant')
+  const intakeQuestionCount = collectSubmittedIntake(messages).questionCount
   const hasCollectedDraftFacts = Object.entries(draft || {}).some(([key, value]) => key !== 'type' && key !== 'selections' && typeof value === 'string' && value.trim())
   const hasPriorAssistantReply = hasCollectedDraftFacts || (Array.isArray(messages) && messages.some((message) => message?.role === 'assistant' && Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0))
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
@@ -192,7 +193,7 @@ function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft
 답변 전에 첨부 자료부터 확인하세요. 문서의 종류와 읽을 수 있는 페이지, 적힌 혐의·주장, 날짜·금액·기관·출석 일정, 제출된 증거를 먼저 추려 요약하세요. 문서에 쓰인 주장과 사용자가 직접 확인한 사실을 구분하고, 근거가 보이는 페이지나 문구를 함께 표시하세요. 문서가 전달됐는데도 다시 업로드하라고 하거나 첨부가 없다고 말하지 마세요. 실제로 판독이 안 되는 부분만 페이지와 항목을 특정해 미확인으로 남기세요. 읽히지 않는 내용을 추측해 채우지 마세요.
 ` : ''
   const complainantFlow = caseMode === 'complainant' ? `
-고소장 작성 대화는 정해진 순서로 진행하세요.
+고소장 작성 대화는 질문지를 전부 채우는 대신, 지금까지 제공된 내용으로 먼저 초안을 만들고 핵심 누락만 확인하세요.
 이 흐름은 사용자가 사건을 설명하거나 고소장 작성을 요청할 때만 적용하세요. 인사나 사건과 무관한 일반 질문에 고소장 입력 질문을 강제로 붙이지 마세요.
 ${hasPriorAssistantReply
     ? '첫 사건 요약은 이미 제시했습니다. 이번 답변에서는 대화 전체와 현재 초안을 다시 대조해 새로 확인된 정보뿐 아니라 이전에 빠뜨린 정보도 draftPatch에 보충하고, 기존에 맞게 입력된 값은 유지하세요. message 본문에는 별도의 후속 질문을 넣지 마세요.'
@@ -200,11 +201,12 @@ ${hasPriorAssistantReply
 사용자가 대화나 첨부자료에서 이미 제공한 인적사항·사건정보를 빠뜨리지 말고 draftPatch에 반영하세요. 초안 필드에 값이 있는데도 그 값을 미리보기에서 다시 입력하라고 안내하지 마세요. 미리보기 직접 입력 안내는 대화에 나오지 않은 필수 정보가 있을 때 그 누락 항목에 한해서만 하세요. 인적사항을 새로 묻지는 말되, 사용자가 명시적으로 제공한 정보는 초안에 넣으세요.
 draftPatch 필드 매핑: complainantName/complainantBirth/complainantAddress/complainantPhone은 사용자가 본인 정보라고 분명히 밝힌 값만, accusedName/accusedAddress/accusedPhone은 상대방 정보라고 분명히 밝힌 값만 넣으세요. 판매자·상대방의 플랫폼 닉네임이나 아이디는 accusedOnlineId, 상대방 계좌번호와 예금주명은 accusedAccount에 함께 넣으세요. incidentDate·incidentTime·incidentPlace는 확인된 일시·시간·장소, incidentSummary는 시간 순서에 따른 행위와 대화, damage는 금전·신체 피해, reason은 고소에 이르게 된 이유, evidence는 대화 캡처·이체 내역·신분증 사진 등 실제 언급한 자료, request는 처벌 의사나 수사 요청, relatedCase는 이미 진행 중인 사건·수사 정보입니다. 값을 다른 필드에 몰아넣지 말고, 일부만 확인됐으면 그 부분만 작성하세요. 마스킹된 번호는 마스킹 상태 그대로 보존하세요.
 AI가 확인할 사건 내용의 순서는 피해 날짜 → 시간 → 장소 → 사건 경위 → 피해 내용·금액 → 고소 이유 → 증거자료 → 처벌 희망·요청 → 관련 수사·재판입니다.
-한 번에 질문은 하나만 하세요. 사용자가 '모름', '없음', '건너뛰기', '나중에 직접 입력'이라고 하면 그 항목을 다시 묻지 말고 다음 순서로 넘어가세요. 이미 메시지나 draft에 답이 있는 항목은 반복 질문하지 마세요. 답할 수 없는 항목 때문에 전체 초안 작성을 멈추지 마세요.
+추가 질문은 사건 날짜, 장소, 사건 경위, 피해, 보유 자료 중 초안을 이해하는 데 정말 필요한 것만 한 번에 하나씩 하세요. 이름·주소·전화번호 등 인적사항, 민사소송 여부, 처벌 의사, 법률 서식의 체크리스트를 채팅으로 묻지 마세요. 이 대화에서 구조화 질문은 최대 ${MAX_INTAKE_QUESTIONS}개입니다. 이미 중요한 사실이 확인됐거나 질문 한도에 도달하면 더 묻지 말고, 확인된 사실의 짧은 요약, 초안에 반영한 내용, 사용자가 지금 확인할 구체적인 다음 행동을 답하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
+사용자가 '모름', '없음', '건너뛰기', '나중에 직접 입력'이라고 하면 해당 항목을 비워 두세요. 같은 항목을 다시 묻지 말고, 초안에서 확인 가능한 사실과 다음 확인 방법을 안내하세요. 이미 메시지나 draft에 답이 있는 항목은 반복 질문하지 마세요.
 ` : ''
   return `당신은 한국어로 대화하는 ${caseMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
-사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 고소장 작성 모드는 정해진 순서에 따라 질문을 한 번에 하나만 하고, 수령 대응 모드는 핵심 질문을 최대 2개 덧붙일 수 있습니다. 인사나 일반 질문에는 자연스럽게 응답하세요.
+사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 확인 질문은 고소장 작성 모드에서 한 번에 하나, 수령 대응 모드에서 최대 2개까지 하되, 이미 받은 답을 반복하거나 대화를 끝없이 이어가지 마세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
 사건 답변은 가능한 경우 **핵심 요약 → 확인된 사실과 추가 확인 사항 → 관련 법적 쟁점과 근거 → 지금 할 일** 순서로 작성하세요. 해당 정보가 없거나 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 표시하세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
@@ -215,6 +217,7 @@ ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 �
 ${modeGuidance}
 ${attachedDocumentGuidance}
 ${isDemoOpening ? '이번 입력은 가상 체험 사례입니다. 제시된 사실만 사용하고, 실제 문서를 받거나 확인한 것처럼 말하지 마세요. 첫 답변은 사건 요약과 지금 채운 내용 중심으로 2~4문장만 간결하게 쓰세요. 확인 질문은 채팅 본문에 반복하지 마세요.' : ''}
+${caseMode === 'complainant' && intakeQuestionCount >= MAX_INTAKE_QUESTIONS ? `이번 대화의 구조화 질문 ${intakeQuestionCount}개가 한도에 도달했습니다. 더 이상 질문을 만들지 마세요. 현재까지 확인된 사실과 초안 상태를 요약하고, 사용자가 할 수 있는 구체적인 다음 행동을 안내하세요.` : ''}
 ${complainantFlow}
 ${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 JSON 객체 하나로만 답하세요. 최상위 키는 message(문자열), draftPatch(객체), responsePatch(객체), searchQuery(문자열), questions(배열)입니다. questions의 각 항목에는 id, text, answerType을 넣고 필요할 때만 detailPrompt를 넣으세요. message에는 이번 사용자 입력에 실제로 답하는 한국어를 작성하세요. 형식 설명이나 예시 문구를 답변으로 복사하지 마세요.
@@ -717,17 +720,6 @@ app.post('/api/chat', async (request, response) => {
   }
   try {
     const safeCaseMode = caseMode === 'respondent' ? 'respondent' : 'complainant'
-    if (safeCaseMode === 'complainant' && isSimpleIntakeSubmission(intakeSubmission)) {
-      const draftPatch = applyCurrentIntakeAnswer({}, draft, intakeSubmission)
-      const mergedDraft = { ...draft, ...draftPatch, selections: { ...draft?.selections, ...draftPatch.selections } }
-      const followUpQuestions = nextComplaintIntakeQuestion(mergedDraft, messages) || []
-      const skipped = intakeSubmission.choice === 'unknown' || /^(?:모름\s*\/\s*건너뛰기|건너뛰기)$/u.test(String(intakeSubmission.text || '').trim())
-      response.json({
-        message: skipped ? '이 항목은 비워 두고 다음으로 넘어갈게요.' : '말씀해 주신 내용을 초안에 반영했습니다.',
-        draftPatch, responsePatch: {}, searchQuery: '', followUpQuestions, instant: true,
-      })
-      return
-    }
     const responseDocumentInput = safeCaseMode === 'respondent' ? documentInput : undefined
     const providerOutput = await callProvider(settings, messages, systemPrompt(draft, precedents, safeCaseMode, responseDraft, messages, responseDocumentInput, demo), responseDocumentInput)
     const output = typeof providerOutput === 'string' ? providerOutput : providerOutput.text
@@ -736,8 +728,16 @@ app.post('/api/chat', async (request, response) => {
     else {
       result.responsePatch = {}
       result.draftPatch = applyCurrentIntakeAnswer(result.draftPatch, draft, intakeSubmission)
-      result.followUpQuestions = nextComplaintIntakeQuestion({ ...draft, ...result.draftPatch, selections: { ...draft?.selections, ...result.draftPatch.selections } }, messages) || []
+      const mergedDraft = { ...draft, ...result.draftPatch, selections: { ...draft?.selections, ...result.draftPatch.selections } }
+      result.followUpQuestions = nextComplaintIntakeQuestion(mergedDraft, messages) || []
       result.message = alignMessageWithIntakeQuestion(result.message, result.followUpQuestions)
+      if (intakeSubmission) {
+        const questionCount = collectSubmittedIntake(messages).questionCount
+        const skipped = intakeSubmission.choice === 'unknown' || /^(?:모름\s*\/\s*건너뛰기|건너뛰기)$/u.test(String(intakeSubmission.text || '').trim())
+        result.message = result.followUpQuestions.length
+          ? `${result.message}\n\n${complaintIntakeProgressMessage(intakeSubmission.questionId, mergedDraft, skipped, questionCount)}`
+          : `${result.message}\n\n${complaintIntakeCompletionMessage(mergedDraft)}`
+      }
     }
     if (typeof providerOutput !== 'string') {
       const selectedModel = normalizeProviderAndModel(settings).model
