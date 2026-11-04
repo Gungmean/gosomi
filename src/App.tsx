@@ -3,7 +3,7 @@ import { MotionConfig } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import {
   ArrowRight, BookOpen, FileText, History, Mic, MicOff,
-  KeyRound, Menu, MessageCircle, MoreHorizontal, Play, Plus,
+  KeyRound, Menu, MessageCircle, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Play, Plus,
   RotateCcw, Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
 import { askAi, getAutomaticPrecedentQuery, searchPrecedents } from './api'
@@ -71,6 +71,7 @@ export default function App() {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewWidth, setPreviewWidth] = useState(() => Math.min(600, Math.max(420, Math.round(window.innerWidth * 0.33))))
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [input, setInput] = useState('')
   const [startType, setStartType] = useState<ComplaintType>(() => findRestorableConversation()?.draft?.type || 'general')
   const [startMode, setStartMode] = useState<CaseMode>(() => findRestorableConversation()?.caseMode || 'complainant')
@@ -555,8 +556,8 @@ export default function App() {
     setPreviewWidth(Math.max(380, Math.min(previewResizeMax, window.innerWidth - clientX)))
   }
 
-  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}`} style={{ '--preview-width': `${previewWidth}px` } as CSSProperties}>
-    <aside className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}${sidebarCollapsed ? ' sidebar-is-collapsed' : ''}`} style={{ '--preview-width': `${previewWidth}px` } as CSSProperties}>
+    <aside id="conversation-sidebar" className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
         <button className="brand" onClick={() => { setActiveId(null); setPreviewOpen(false); setSidebarOpen(false) }} aria-label="고소미 홈으로">
           <img src="/gosomi-logo.png" alt="고소미 고소도우미" />
@@ -591,6 +592,7 @@ export default function App() {
     <main className="workspace">
       <header className="topbar">
         <div className="topbar-left">
+          <button className="desktop-sidebar-toggle icon-button" aria-label={sidebarCollapsed ? '대화 기록 열기' : '대화 기록 닫기'} aria-controls="conversation-sidebar" aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? '대화 기록 열기' : '대화 기록 닫기'} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
           <button className="mobile-menu-button icon-button" aria-label="대화 목록 열기" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
           <div className="topbar-title"><span className="topbar-eyebrow">{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성 도움'}</span><strong>{active ? active.title : '새로운 대화'}</strong></div>
         </div>

@@ -70,6 +70,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .workspace { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .topbar { height: 76px; flex: 0 0 76px; border-bottom: 1px solid #edf0ed; display: flex; align-items: center; justify-content: space-between; padding: 0 35px; background: #fff; }
 .topbar-left, .topbar-actions { display: flex; align-items: center; }
+.desktop-sidebar-toggle { display: none; }
 .topbar-title { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .topbar-eyebrow { color: #9ba19b; font-size: 10px; font-weight: 660; letter-spacing: .07em; }
 .topbar-title strong { font-size: 16px; font-weight: 720; letter-spacing: -.035em; white-space: nowrap; text-overflow: ellipsis; overflow: hidden; max-width: 40vw; }
@@ -497,6 +498,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .sidebar { width: 225px; flex-basis: 225px; }
   .topbar { padding: 0 27px; }
   .welcome { padding-left: 30px; padding-right: 30px; }
+}
+
+@media (min-width: 751px) {
+  .desktop-sidebar-toggle { width: 36px; height: 36px; margin-right: 9px; display: grid; flex: 0 0 36px; border: 1px solid transparent; color: #667269; }
+  .desktop-sidebar-toggle:hover { border-color: #e3eae4; background: #f5f8f5; color: var(--green); }
+  .sidebar { transition: width .22s ease, flex-basis .22s ease, padding .22s ease, opacity .14s ease; }
+  .app-shell.sidebar-is-collapsed .sidebar { width: 0; min-width: 0; flex-basis: 0; padding-left: 0; padding-right: 0; overflow: hidden; border-right-width: 0; opacity: 0; visibility: hidden; }
+}
+
+@media (min-width: 751px) and (prefers-reduced-motion: reduce) {
+  .sidebar { transition: none !important; }
 }
 
 @media (max-width: 750px) {
