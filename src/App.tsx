@@ -62,7 +62,8 @@ function findRestorableConversation() {
 }
 
 export default function App() {
-  const boothMode = new URLSearchParams(window.location.search).get('booth') === '1'
+  // The festival-ready experience is the main app screen at `/`.
+  const boothMode = true
   const [conversations, setConversations] = useState<Conversation[]>(() => boothMode ? [] : loadConversations())
   const [activeId, setActiveId] = useState<string | null>(() => boothMode ? null : findRestorableConversation()?.id || null)
   const [settings, setSettings] = useState<AiSettings>(loadSettings)
@@ -662,6 +663,7 @@ export default function App() {
             <div><strong>SW 페스티벌 체험</strong><span>가상 사례로 사건 정리 과정을 살펴보세요</span></div>
           </div>
           <div className="topbar-actions booth-topbar-actions">
+            <button className="booth-settings-button" type="button" onClick={() => setSettingsOpen(true)}><KeyRound size={16} /><span>운영 설정</span></button>
             {active?.messages.length ? <button className="topbar-link booth-preview-link" onClick={() => setPreviewOpen(true)}><FileText size={18} /><span>{currentMode === 'respondent' ? '대응 메모 보기' : '고소장 미리보기'}</span></button> : null}
             {(active || boothScenarioId) && <button className="booth-reset-button" onClick={resetBoothExperience} disabled={busy || uploading}>{active?.messages.length ? '다음 체험' : '사례 다시 고르기'}</button>}
           </div>
@@ -828,7 +830,7 @@ export default function App() {
         if (event.key === 'ArrowRight') { event.preventDefault(); setPreviewWidth((width) => Math.max(380, width - 24)) }
       }}
     />}
-    {!boothMode && <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />}
+    <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
     {!boothMode && <DemoScenarioDialog open={demoOpen} onOpenChange={setDemoOpen} onSelect={selectDemoScenario} />}
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}

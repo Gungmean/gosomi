@@ -139,6 +139,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .booth-brand-lockup strong { color: #202b22; font-size: 16px; font-weight: 720; }
 .booth-brand-lockup span { color: #5a6b5e; font-size: 13px; }
 .booth-topbar-actions { gap: 12px; }
+.booth-settings-button { min-height: 42px; padding: 0 12px; border: 1px solid #dce5dd; border-radius: 7px; background: #fff; color: #385540; display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 650; }
+.booth-settings-button:hover { border-color: #adc6b1; background: #f7faf7; }
 .booth-preview-link { height: 42px; color: #2f5036; font-size: 14px; }
 .booth-reset-button { min-height: 44px; padding: 0 18px; border: 0; border-radius: 7px; background: #175c2a; color: #fff; font-size: 14px; font-weight: 680; }
 .booth-reset-button:hover:not(:disabled), .booth-start-button:hover:not(:disabled) { background: #104820; }
