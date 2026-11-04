@@ -57,13 +57,9 @@ function choiceFromShortReply(text: string): FollowUpAnswer['choice'] | undefine
   return undefined
 }
 
-function findRestorableConversation() {
-  return loadConversations().find((conversation) => conversation.messages.length > 0 || Boolean(conversation.receivedDocuments?.length))
-}
-
 export default function App() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
-  const [activeId, setActiveId] = useState<string | null>(() => findRestorableConversation()?.id || null)
+  const [activeId, setActiveId] = useState<string | null>(null)
   const [settings, setSettings] = useState<AiSettings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [precedentOpen, setPrecedentOpen] = useState(false)
@@ -73,8 +69,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [input, setInput] = useState('')
-  const [startType, setStartType] = useState<ComplaintType>(() => findRestorableConversation()?.draft?.type || 'general')
-  const [startMode, setStartMode] = useState<CaseMode>(() => findRestorableConversation()?.caseMode || 'complainant')
+  const [startType, setStartType] = useState<ComplaintType>('general')
+  const [startMode, setStartMode] = useState<CaseMode>('complainant')
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState('')
