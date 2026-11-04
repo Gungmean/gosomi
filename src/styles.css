@@ -108,6 +108,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .landing-composer textarea::placeholder { color: #929a93; }
 .landing-composer-footer { min-height: 48px; padding: 5px 10px 9px 18px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .landing-composer-footer > span { color: #788179; font-size: 12px; line-height: 1.4; }
+.composer-actions { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; }
+.voice-input-button { width: 34px; height: 34px; border: 1px solid #e2e9e3; border-radius: 9px; display: grid; place-items: center; background: #fff; color: #617064; transition: background .15s, color .15s, border-color .15s; }
+.voice-input-button:hover:not(:disabled) { border-color: #a9c5ae; background: #f3f8f4; color: var(--green); }
+.voice-input-button.listening { border-color: #d99a9a; background: #fff2f2; color: #b33232; animation: voice-pulse 1.3s ease-in-out infinite; }
+.voice-input-button:disabled { opacity: .5; cursor: not-allowed; }
+@keyframes voice-pulse { 50% { box-shadow: 0 0 0 4px #b3323218; } }
 .welcome-tools { display: flex; gap: 18px; margin-top: 18px; }
 .welcome-tools button { display: inline-flex; align-items: center; gap: 7px; padding: 2px 0; border: 0; background: transparent; color: #526557; font-size: 13px; font-weight: 560; }
 .welcome-tools button:hover { color: var(--green); text-decoration: underline; text-underline-offset: 3px; }
@@ -219,7 +225,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .composer-input-row { display: flex; align-items: stretch; min-width: 0; }
 .composer textarea { flex: 1; width: 0; min-width: 0; min-height: 66px; max-height: 200px; resize: vertical; padding: 17px 18px 2px 10px; border: none; outline: none; background: transparent; color: #1d231e; font-size: 14px; line-height: 1.55; }
 .composer textarea::placeholder { color: #adb5ae; }
-.composer-bottom { padding: 0 10px 9px 18px; display: flex; align-items: center; justify-content: space-between; }
+.composer-bottom { padding: 0 10px 9px 18px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .composer-bottom span { color: #b2b9b2; font-size: 10px; }
 .send-button { width: 34px; height: 34px; border: 0; border-radius: 9px; display: grid; place-items: center; background: var(--green); color: #fff; transition: background .15s, transform .15s; }
 .send-button:hover:not(:disabled) { background: var(--green-hover); transform: translateY(-1px); }

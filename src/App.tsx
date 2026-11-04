@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { MotionConfig } from 'motion/react'
 import ReactMarkdown from 'react-markdown'
 import {
-  ArrowRight, BookOpen, FileText, History,
+  ArrowRight, BookOpen, FileText, History, Mic, MicOff,
   KeyRound, Menu, MessageCircle, MoreHorizontal, Play, Plus,
   Send, ShieldCheck, Trash2, X,
 } from 'lucide-react'
@@ -20,6 +20,18 @@ import { isValidApiKeyFormat, loadConversations, loadSettings, saveConversations
 import { deleteDocumentFile, getDocumentPageCount, isSupportedDocument, MAX_DOCUMENT_PAGES, prepareDocumentInput, saveDocumentFile } from './documentStore'
 import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent, ReceivedDocument, ResponseDraft } from './types'
 import { blankDraft, blankResponseDraft, createConversation } from './types'
+
+type SpeechResult = { isFinal: boolean; [index: number]: { transcript: string } }
+type SpeechRecognitionLike = {
+  lang: string
+  interimResults: boolean
+  continuous: boolean
+  onresult: ((event: { resultIndex: number; results: ArrayLike<SpeechResult> }) => void) | null
+  onerror: ((event: { error: string }) => void) | null
+  onend: (() => void) | null
+  start: () => void
+  stop: () => void
+}
 
 function makeMessage(role: ChatMessage['role'], text: string): ChatMessage {
   return { id: crypto.randomUUID(), role, text, createdAt: Date.now() }
@@ -64,12 +76,15 @@ export default function App() {
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState('')
+  const [voiceListening, setVoiceListening] = useState(false)
   const [typingMessageId, setTypingMessageId] = useState<string | null>(null)
   const [completedTypingId, setCompletedTypingId] = useState<string | null>(null)
   const [animatedDraftFields, setAnimatedDraftFields] = useState<Record<string, string>>({})
   const chatScrollRef = useRef<HTMLDivElement>(null)
   const scrollEnd = useRef<HTMLDivElement>(null)
   const landingTextareaRef = useRef<HTMLTextAreaElement>(null)
+  const speechRecognitionRef = useRef<SpeechRecognitionLike | null>(null)
+  const voiceInputBaseRef = useRef('')
   const active = conversations.find((item) => item.id === activeId) || null
   const draft = active?.draft || blankDraft()
   const responseDraft = active?.responseDraft || blankResponseDraft()
@@ -78,6 +93,62 @@ export default function App() {
   const isWelcome = !active || active.messages.length === 0
 
   useTypedPlaceholder(landingTextareaRef, startType, Boolean(input), isWelcome)
+
+  useEffect(() => () => {
+    speechRecognitionRef.current?.stop()
+  }, [])
+
+  function toggleVoiceInput() {
+    if (voiceListening) {
+      speechRecognitionRef.current?.stop()
+      return
+    }
+
+    const speechWindow = window as Window & {
+      SpeechRecognition?: new () => SpeechRecognitionLike
+      webkitSpeechRecognition?: new () => SpeechRecognitionLike
+    }
+    const Recognition = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition
+    if (!Recognition) {
+      setNotice('이 브라우저에서는 음성 입력을 지원하지 않습니다. Chrome이나 Edge에서 다시 시도해주세요.')
+      return
+    }
+
+    const recognition = new Recognition()
+    recognition.lang = 'ko-KR'
+    recognition.interimResults = true
+    recognition.continuous = true
+    voiceInputBaseRef.current = input.trim() ? `${input.trimEnd()}\n` : ''
+    speechRecognitionRef.current = recognition
+    recognition.onresult = (event) => {
+      const transcript = Array.from({ length: event.results.length }, (_, index) => {
+        const result = event.results[index]
+        return result?.[0]?.transcript || ''
+      }).join('')
+      setInput(`${voiceInputBaseRef.current}${transcript}`)
+    }
+    recognition.onerror = (event) => {
+      setVoiceListening(false)
+      if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+        setNotice('마이크 권한이 필요합니다. 브라우저 주소창의 사이트 설정에서 마이크를 허용해주세요.')
+      } else if (event.error === 'no-speech') {
+        setNotice('음성이 감지되지 않았어요. 마이크와 주변 소리를 확인해주세요.')
+      } else if (event.error !== 'aborted') {
+        setNotice('음성 인식에 문제가 생겼습니다. 잠시 후 다시 시도해주세요.')
+      }
+    }
+    recognition.onend = () => {
+      setVoiceListening(false)
+      speechRecognitionRef.current = null
+    }
+    try {
+      recognition.start()
+      setVoiceListening(true)
+    } catch {
+      speechRecognitionRef.current = null
+      setNotice('음성 입력을 시작하지 못했습니다. 잠시 후 다시 시도해주세요.')
+    }
+  }
 
   function scrollToBottom(duringTyping = false) {
     const container = chatScrollRef.current
@@ -142,6 +213,13 @@ export default function App() {
   }
 
   function newConversation(type: ComplaintType = 'general', prompt = '', mode: CaseMode = startMode) {
+    if (speechRecognitionRef.current) {
+      speechRecognitionRef.current.onresult = null
+      speechRecognitionRef.current.onend = null
+      speechRecognitionRef.current.stop()
+      speechRecognitionRef.current = null
+      setVoiceListening(false)
+    }
     const next = createConversation(type, mode)
     setConversations((current) => [next, ...current])
     setActiveId(next.id)
@@ -210,6 +288,13 @@ export default function App() {
   ) {
     const text = (messageText ?? input).trim()
     if (!text || busy || uploading) return
+    if (speechRecognitionRef.current) {
+      speechRecognitionRef.current.onresult = null
+      speechRecognitionRef.current.onend = null
+      speechRecognitionRef.current.stop()
+      speechRecognitionRef.current = null
+      setVoiceListening(false)
+    }
     const cleanApiKey = settings.apiKey.replace(/\s+/g, '')
     if (!cleanApiKey) {
       setSettingsOpen(true)
@@ -520,13 +605,13 @@ export default function App() {
               {startMode === 'respondent' && <ReceivedDocuments compact documents={active?.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('첨부한 고소장의 내용을 읽고, 주장과 확인된 사실, 일정, 보존할 증거를 구분해서 정리해줘.')} />}
               <textarea ref={landingTextareaRef} value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder={startMode === 'respondent' ? '예: 경찰에서 사기 혐의로 연락이 왔고, 다음 주 출석하라고 했어요.' : '예: 중고거래 대금을 보냈는데 물건을 받지 못했고, 판매자가 연락을 끊었어요.'} rows={3} aria-label="사건 내용 입력" />
             </div>
-            <div className="landing-composer-footer"><span>{startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '먼저 사건을 요약한 뒤, 사건 내용의 빈칸을 순서대로 하나씩 확인해요. 이름·주소 등 인적사항은 미리보기에서 직접 입력해도 됩니다.'}</span><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
+            <div className="landing-composer-footer"><span>{voiceListening ? '듣고 있어요 · 마이크 버튼을 눌러 마치세요.' : startMode === 'respondent' ? '받은 문서의 종류·연락 기관·출석 일정부터 알려주세요.' : '먼저 사건을 요약한 뒤, 사건 내용의 빈칸을 순서대로 하나씩 확인해요. 이름·주소 등 인적사항은 미리보기에서 직접 입력해도 됩니다.'}</span><div className="composer-actions"><button className={`voice-input-button${voiceListening ? ' listening' : ''}`} type="button" aria-label={voiceListening ? '음성 입력 마치기' : '음성 입력 시작'} aria-pressed={voiceListening} title={voiceListening ? '음성 입력 마치기' : '음성으로 입력'} onClick={toggleVoiceInput} disabled={busy || uploading}>{voiceListening ? <MicOff size={18} /> : <Mic size={18} />}</button><button className="send-button" aria-label="사건 내용 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div></div>
           </div>
           <div className="welcome-tools">
             <button onClick={() => setPrecedentOpen(true)}><BookOpen size={16} /> 판례 먼저 찾아보기</button>
             {startMode === 'complainant' && <button onClick={() => { ensureConversation(startType); setPreviewOpen(true) }}><FileText size={16} /> 고소장 양식 보기</button>}
           </div>
-          <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '첨부 문서를 분석하면 내용이 선택한 AI 제공자에게 전송됩니다. 이름·주소·사건번호 등은 먼저 가려주세요.' : '대화와 초안은 이 브라우저에 저장됩니다. 전송 시 선택한 AI 제공자에게 전달되며, 답변은 검토용입니다.'}</p>
+          <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '첨부 문서를 분석하면 내용이 선택한 AI 제공자에게 전송됩니다. 이름·주소·사건번호 등은 먼저 가려주세요.' : '대화와 초안은 이 브라우저에 저장됩니다. 전송 시 선택한 AI 제공자에게 전달되며, 답변은 검토용입니다.'} 음성 인식 중 음성이 브라우저 제공 서비스로 전송될 수 있습니다.</p>
         </div> : <div className="message-stream">
           <div className="stream-intro"><span>{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'}</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
           {active.messages.map((message) => <div className={`message-row ${message.role}`} key={message.id}>
@@ -576,9 +661,9 @@ export default function App() {
             {currentMode === 'respondent' && <ReceivedDocuments compact documents={active.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('새로 첨부한 고소장 내용을 읽고 기존 대응 메모에 반영해줘.')} />}
             <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); handleSend() } }} placeholder="추가로 알려주실 내용이 있나요?" rows={2} aria-label="메시지 입력" />
           </div>
-          <div className="composer-bottom"><span>Enter 전송 · Shift + Enter 줄바꿈</span><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div>
+          <div className="composer-bottom"><span>{voiceListening ? '듣고 있어요 · 마이크 버튼을 눌러 마치세요.' : 'Enter 전송 · Shift + Enter 줄바꿈'}</span><div className="composer-actions"><button className={`voice-input-button${voiceListening ? ' listening' : ''}`} type="button" aria-label={voiceListening ? '음성 입력 마치기' : '음성 입력 시작'} aria-pressed={voiceListening} title={voiceListening ? '음성 입력 마치기' : '음성으로 입력'} onClick={toggleVoiceInput} disabled={busy || uploading}>{voiceListening ? <MicOff size={18} /> : <Mic size={18} />}</button><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div></div>
         </div>
-        <p className="composer-note">{active?.caseMode === 'respondent' ? '대화와 첨부 문서는 선택한 AI 제공자에게 전송됩니다. 개인정보를 가리고 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '대화와 고소장 초안은 답변을 위해 선택한 AI 제공자에게 전송됩니다. 제출 전 사실관계와 초안을 직접 확인해주세요.'}</p>
+        <p className="composer-note">{active?.caseMode === 'respondent' ? '대화와 첨부 문서는 선택한 AI 제공자에게 전송됩니다. 개인정보를 가리고 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '대화와 고소장 초안은 답변을 위해 선택한 AI 제공자에게 전송됩니다. 제출 전 사실관계와 초안을 직접 확인해주세요.'} 음성 인식 중 음성이 브라우저 제공 서비스로 전송될 수 있습니다.</p>
       </div> : null}
     </main>
 
