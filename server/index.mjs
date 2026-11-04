@@ -3,7 +3,7 @@ import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, applySubmittedIntakeAnswers, collectSubmittedIntake, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, MAX_INTAKE_QUESTIONS, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
-import { enrichAccusedAccount, extractAccusedIdentity } from './explicitFacts.mjs'
+import { enrichAccusedAccount, extractAccusedIdentity, extractComplainantIdentity } from './explicitFacts.mjs'
 
 const app = express()
 const port = Number(process.env.PORT || 8787)
@@ -337,9 +337,16 @@ export function supplementExplicitFacts(result, messages, draft, responseDraft, 
     if (genericMessage && policeContact) result.message = '고소장 원본과 출석 일정이 확인되지 않았습니다. 연락한 기관의 공식 대표번호로 사건번호와 출석 요구를 확인하고, 가지고 있는 거래 자료 원본을 보존해 주세요. 확인한 내용은 대응 메모에 구분해 적었습니다.'
   } else {
     const explicitIdentity = [...userTexts].reverse().map(extractAccusedIdentity)
-    for (const field of ['accusedName', 'accusedPhone', 'accusedOnlineId', 'accusedAccount']) {
-      if (!result.draftPatch[field] && !draft?.[field]) {
+    for (const field of ['accusedName', 'accusedAddress', 'accusedPhone', 'accusedOnlineId', 'accusedAccount']) {
+      if (!draft?.[field]) {
         const value = explicitIdentity.find((facts) => facts[field])?.[field]
+        if (value) result.draftPatch[field] = value
+      }
+    }
+    const explicitComplainant = [...userTexts].reverse().map(extractComplainantIdentity)
+    for (const field of ['complainantName', 'complainantBirth', 'complainantAddress', 'complainantPhone']) {
+      if (!draft?.[field]) {
+        const value = explicitComplainant.find((facts) => facts[field])?.[field]
         if (value) result.draftPatch[field] = value
       }
     }

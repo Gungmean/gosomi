@@ -20,13 +20,17 @@ export function extractAccusedIdentity(text) {
   }
 
   const name = source.match(new RegExp(`${party}(?:의)?\\s*(?:성명|실명|이름)\\s*(?:은|는|이|가|:|：)?\\s*([가-힣]{2,10})`, 'u'))
+    || source.match(/(?:^|[\s,.])([김이박최정강조윤장임한오서신권황안송류홍전고문양손배백허유남심노하곽성차주우구민진지엄원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예봉][가-힣]{1,3})(?:에게|한테)\s*(?:사기|폭행|협박|모욕|피해|돈을?\s*빌려)/u)
   if (name) {
     const value = cleanIdentifier(name[1])
     if (value) result.accusedName = value
   }
 
   const phone = source.match(new RegExp(`${party}(?:의)?[^\n.!?]{0,30}?(?:연락처|전화번호|휴대전화)\\s*(?:은|는|이|가|:|：)?\\s*((?:0\\d{1,2})[- ]?(?:\\d|[Xx*]){3,4}[- ]?(?:\\d|[Xx*]){4})`, 'u'))
-  if (phone) result.accusedPhone = phone[1]
+  if (phone && !/(?:제|내|고소인의?)\s*(?:연락처|전화번호|휴대전화)/u.test(phone[0])) result.accusedPhone = phone[1]
+
+  const address = source.match(new RegExp(`${party}(?:의)?\\s*(?:주소|거주지)\\s*(?:은|는|이|가|:|：)\\s*([^,\\n.!?]+)`, 'u'))
+  if (address && !unknownValue.test(address[1].trim())) result.accusedAddress = address[1].trim().replace(/(?:입니다|이에요|예요)$/u, '')
 
   const account = /(?:계좌번호|입금계좌)\s*(?:는|은|이|가|:|：)?\s*[(\[]?\s*([0-9Xx*＊][0-9Xx*＊\s-]{4,38}[0-9Xx*＊])/u.exec(source)
   if (account && /(?:판매자|상대방|피고소인|가해자|피의자|송금|입금|이체)/u.test(source)) {
@@ -39,6 +43,21 @@ export function extractAccusedIdentity(text) {
     }
   }
 
+  return result
+}
+
+export function extractComplainantIdentity(text) {
+  const source = String(text || '')
+  const result = {}
+  const name = source.match(/(?:제\s*이름|내\s*이름|고소인(?:의)?\s*(?:이름|성명))\s*(?:은|는|이|가|:|：)\s*([가-힣]{2,4}?)(?=입니다|이에요|예요|이라고|이고|[\s,.!]|$)/u)
+    || source.match(/(?:저는|나는)\s*([김이박최정강조윤장임한오서신권황안송류홍전고문양손배백허유남심노하곽성차주우구민진지엄원천방공현함변염여추도소석선설마길연위표명기반왕금옥육인맹제모탁국어은편용예봉][가-힣]{1,3})(?:입니다|이에요|예요)(?:[\s,.!]|$)/u)
+  if (name) result.complainantName = name[1]
+  const phone = source.match(/(?:제|내|고소인(?:의)?)\s*(?:연락처|전화번호|휴대전화)\s*(?:은|는|이|가|:|：)\s*(0\d{1,2}[- ]?(?:\d|[Xx*]){3,4}[- ]?(?:\d|[Xx*]){4})/u)
+  if (phone) result.complainantPhone = phone[1]
+  const address = source.match(/(?:제|내|고소인(?:의)?)\s*(?:주소|거주지)\s*(?:은|는|이|가|:|：)\s*([^,\n.!?]+)/u)
+  if (address && !unknownValue.test(address[1].trim())) result.complainantAddress = address[1].trim().replace(/(?:입니다|이에요|예요)$/u, '')
+  const birth = source.match(/(?:제|내|고소인(?:의)?)\s*(?:생년월일|생일)\s*(?:은|는|이|가|:|：)\s*(\d{4}(?:[.\-/년]\s*)\d{1,2}(?:[.\-/월]\s*)\d{1,2}일?)/u)
+  if (birth) result.complainantBirth = birth[1].trim()
   return result
 }
 

@@ -1,7 +1,31 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { enrichAccusedAccount, extractAccusedIdentity } from './explicitFacts.mjs'
+import { enrichAccusedAccount, extractAccusedIdentity, extractComplainantIdentity } from './explicitFacts.mjs'
 import { supplementExplicitFacts } from './index.mjs'
+
+test('extracts a named person from a natural description without guessing a relationship as a name', () => {
+  assert.equal(extractAccusedIdentity('내가 오정민에게 사기를 당했어').accusedName, '오정민')
+  assert.equal(extractAccusedIdentity('내가 친구에게 사기를 당했어').accusedName, undefined)
+})
+
+test('keeps clearly labelled personal details with their respective parties', () => {
+  const text = '제 이름은 김선중입니다. 제 생년월일은 2008년 3월 2일. 제 전화번호는 010-1234-5678입니다. 상대방 주소는 서울시 강남구입니다.'
+  const result = supplementExplicitFacts({ message: '정리했습니다.', draftPatch: {}, responsePatch: {} }, [{ role: 'user', text }], {}, {}, 'complainant')
+  assert.equal(result.draftPatch.complainantName, '김선중')
+  assert.equal(result.draftPatch.complainantBirth, '2008년 3월 2일')
+  assert.equal(result.draftPatch.complainantPhone, '010-1234-5678')
+  assert.equal(result.draftPatch.accusedAddress, '서울시 강남구')
+  assert.equal(extractAccusedIdentity('상대방에게 피해를 입었어요. 제 전화번호는 010-1234-5678입니다.').accusedPhone, undefined)
+  assert.equal(extractComplainantIdentity('저는 피해자입니다.').complainantName, undefined)
+})
+
+test('fills a missing name while preserving a manually edited draft', () => {
+  const messages = [{ role: 'user', text: '내가 오정민에게 사기를 당했어' }]
+  const result = supplementExplicitFacts({ message: '정리했습니다.', draftPatch: {}, responsePatch: {} }, messages, {}, {}, 'complainant')
+  assert.equal(result.draftPatch.accusedName, '오정민')
+  const existing = supplementExplicitFacts({ message: '정리했습니다.', draftPatch: {}, responsePatch: {} }, messages, { accusedName: '직접 수정한 이름' }, {}, 'complainant')
+  assert.equal(existing.draftPatch.accusedName, undefined)
+})
 
 test('extracts the seller nickname without the Korean case particle', () => {
   assert.equal(
