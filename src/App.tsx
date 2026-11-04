@@ -124,7 +124,7 @@ export default function App() {
       const transcript = Array.from({ length: event.results.length }, (_, index) => {
         const result = event.results[index]
         return result?.[0]?.transcript || ''
-      }).join('')
+      }).filter(Boolean).join(' ').replace(/\s+/g, ' ').trim()
       setInput(`${voiceInputBaseRef.current}${transcript}`)
     }
     recognition.onerror = (event) => {
@@ -132,9 +132,17 @@ export default function App() {
       if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
         setNotice('마이크 권한이 필요합니다. 브라우저 주소창의 사이트 설정에서 마이크를 허용해주세요.')
       } else if (event.error === 'no-speech') {
-        setNotice('음성이 감지되지 않았어요. 마이크와 주변 소리를 확인해주세요.')
-      } else if (event.error !== 'aborted') {
-        setNotice('음성 인식에 문제가 생겼습니다. 잠시 후 다시 시도해주세요.')
+        setNotice('음성이 감지되지 않았어요. 마이크를 입 가까이 두고 버튼을 누른 뒤 바로 말해주세요.')
+      } else if (event.error === 'audio-capture') {
+        setNotice('마이크를 찾을 수 없습니다. 연결 상태와 운영체제의 마이크 설정을 확인해주세요.')
+      } else if (event.error === 'network') {
+        setNotice('음성 인식 서비스에 연결할 수 없습니다. 인터넷 연결을 확인한 뒤 다시 시도해주세요.')
+      } else if (event.error === 'language-not-supported') {
+        setNotice('이 브라우저의 음성 인식 서비스가 한국어를 지원하지 않습니다.')
+      } else if (event.error === 'aborted') {
+        setNotice('음성 입력이 중단되었습니다. 다시 눌러 시작해주세요.')
+      } else {
+        setNotice(`음성 인식이 중단되었습니다 (${event.error}). 마이크 권한과 입력 장치를 확인해주세요.`)
       }
     }
     recognition.onend = () => {
