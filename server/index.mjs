@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, collectSubmittedIntake, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, MAX_INTAKE_QUESTIONS, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
+import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, applySubmittedIntakeAnswers, collectSubmittedIntake, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, MAX_INTAKE_QUESTIONS, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
 import { enrichAccusedAccount, extractAccusedIdentity } from './explicitFacts.mjs'
 
 const app = express()
@@ -201,12 +201,12 @@ ${hasPriorAssistantReply
 사용자가 대화나 첨부자료에서 이미 제공한 인적사항·사건정보를 빠뜨리지 말고 draftPatch에 반영하세요. 초안 필드에 값이 있는데도 그 값을 미리보기에서 다시 입력하라고 안내하지 마세요. 미리보기 직접 입력 안내는 대화에 나오지 않은 필수 정보가 있을 때 그 누락 항목에 한해서만 하세요. 인적사항을 새로 묻지는 말되, 사용자가 명시적으로 제공한 정보는 초안에 넣으세요.
 draftPatch 필드 매핑: complainantName/complainantBirth/complainantAddress/complainantPhone은 사용자가 본인 정보라고 분명히 밝힌 값만, accusedName/accusedAddress/accusedPhone은 상대방 정보라고 분명히 밝힌 값만 넣으세요. 판매자·상대방의 플랫폼 닉네임이나 아이디는 accusedOnlineId, 상대방 계좌번호와 예금주명은 accusedAccount에 함께 넣으세요. incidentDate·incidentTime·incidentPlace는 확인된 일시·시간·장소, incidentSummary는 시간 순서에 따른 행위와 대화, damage는 금전·신체 피해, reason은 고소에 이르게 된 이유, evidence는 대화 캡처·이체 내역·신분증 사진 등 실제 언급한 자료, request는 처벌 의사나 수사 요청, relatedCase는 이미 진행 중인 사건·수사 정보입니다. 값을 다른 필드에 몰아넣지 말고, 일부만 확인됐으면 그 부분만 작성하세요. 마스킹된 번호는 마스킹 상태 그대로 보존하세요.
 AI가 확인할 사건 내용의 순서는 피해 날짜 → 시간 → 장소 → 사건 경위 → 피해 내용·금액 → 고소 이유 → 증거자료 → 처벌 희망·요청 → 관련 수사·재판입니다.
-추가 질문은 사건 날짜, 장소, 사건 경위, 피해, 보유 자료 중 초안을 이해하는 데 정말 필요한 것만 한 번에 하나씩 하세요. 이름·주소·전화번호 등 인적사항, 민사소송 여부, 처벌 의사, 법률 서식의 체크리스트를 채팅으로 묻지 마세요. 이 대화에서 구조화 질문은 최대 ${MAX_INTAKE_QUESTIONS}개입니다. 이미 중요한 사실이 확인됐거나 질문 한도에 도달하면 더 묻지 말고, 확인된 사실의 짧은 요약, 초안에 반영한 내용, 사용자가 지금 확인할 구체적인 다음 행동을 답하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
+추가 질문은 사건 날짜, 장소, 사건 경위, 피해, 보유 자료 중 초안을 이해하는 데 정말 필요한 것만 한 번에 하나씩 하세요. 이 핵심 사건 확인 질문은 최대 ${MAX_INTAKE_QUESTIONS}개입니다. 이름·주소·전화번호는 채팅으로 묻지 마세요. 사건 유형이 fraud/defamation/assault로 정해지면 해당 고소장 체크리스트는 서버가 별도 카드 하나에 모두 묶어 한꺼번에 제시합니다. 체크리스트 항목을 message나 questions에서 하나씩 물어보지 마세요. 핵심 사건 확인과 체크리스트 답변이 끝나면 더 묻지 말고, 확인된 사실의 짧은 요약, 초안에 반영한 내용, 사용자가 지금 확인할 구체적인 다음 행동을 답하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
 사용자가 '모름', '없음', '건너뛰기', '나중에 직접 입력'이라고 하면 해당 항목을 비워 두세요. 같은 항목을 다시 묻지 말고, 초안에서 확인 가능한 사실과 다음 확인 방법을 안내하세요. 이미 메시지나 draft에 답이 있는 항목은 반복 질문하지 마세요.
 ` : ''
   return `당신은 한국어로 대화하는 ${caseMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
-사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 확인 질문은 고소장 작성 모드에서 한 번에 하나, 수령 대응 모드에서 최대 2개까지 하되, 이미 받은 답을 반복하거나 대화를 끝없이 이어가지 마세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
+사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 고소장 작성 모드에서는 핵심 사건 질문은 한 번에 하나씩, 사건 체크리스트는 한 카드에 모두 묶어 물으세요. 수령 대응 모드에서는 핵심 질문을 최대 2개까지 하되, 이미 받은 답을 반복하거나 대화를 끝없이 이어가지 마세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
 사건 답변은 가능한 경우 **핵심 요약 → 확인된 사실과 추가 확인 사항 → 관련 법적 쟁점과 근거 → 지금 할 일** 순서로 작성하세요. 해당 정보가 없거나 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 표시하세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
@@ -728,15 +728,19 @@ app.post('/api/chat', async (request, response) => {
     else {
       result.responsePatch = {}
       result.draftPatch = applyCurrentIntakeAnswer(result.draftPatch, draft, intakeSubmission)
+      result.draftPatch = applySubmittedIntakeAnswers(result.draftPatch, draft, messages)
       const mergedDraft = { ...draft, ...result.draftPatch, selections: { ...draft?.selections, ...result.draftPatch.selections } }
       result.followUpQuestions = nextComplaintIntakeQuestion(mergedDraft, messages) || []
       result.message = alignMessageWithIntakeQuestion(result.message, result.followUpQuestions)
-      if (intakeSubmission) {
+      const hasIncidentDraft = ['incidentDate', 'incidentPlace', 'incidentSummary', 'damage', 'evidence'].some((field) => String(mergedDraft?.[field] || '').trim())
+      if (intakeSubmission || (!result.followUpQuestions.length && hasIncidentDraft)) {
         const questionCount = collectSubmittedIntake(messages).questionCount
-        const skipped = intakeSubmission.choice === 'unknown' || /^(?:모름\s*\/\s*건너뛰기|건너뛰기)$/u.test(String(intakeSubmission.text || '').trim())
-        result.message = result.followUpQuestions.length
-          ? `${result.message}\n\n${complaintIntakeProgressMessage(intakeSubmission.questionId, mergedDraft, skipped, questionCount)}`
-          : `${result.message}\n\n${complaintIntakeCompletionMessage(mergedDraft)}`
+        const skipped = Boolean(intakeSubmission && (intakeSubmission.choice === 'unknown' || /^(?:모름\s*\/\s*건너뛰기|건너뛰기)$/u.test(String(intakeSubmission.text || '').trim())))
+        if (result.followUpQuestions.length && intakeSubmission) {
+          result.message = `${result.message}\n\n${complaintIntakeProgressMessage(intakeSubmission.questionId, mergedDraft, skipped, questionCount)}`
+        } else if (!result.followUpQuestions.length) {
+          result.message = `${result.message}\n\n${complaintIntakeCompletionMessage(mergedDraft)}`
+        }
       }
     }
     if (typeof providerOutput !== 'string') {

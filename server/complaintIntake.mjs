@@ -15,6 +15,9 @@ export const complaintIntakeSteps = [
 export const MAX_INTAKE_QUESTIONS = 3
 const coreIntakeFields = new Set(['incidentDate', 'incidentPlace', 'incidentSummary', 'damage', 'evidence'])
 const coreIntakeSteps = complaintIntakeSteps.filter((step) => coreIntakeFields.has(step.field))
+const checklistStepsByType = Object.fromEntries(Object.entries(checklistQuestions).map(([type, questions]) => [type,
+  questions.map((question) => ({ field: question.id, text: question.label, selection: true, answerType: 'yes_no' })),
+]))
 
 const identitySteps = [
   ['complainantName', '고소인의 성명을 알려주세요. 직접 입력하거나 건너뛰어도 됩니다.'],
@@ -62,7 +65,7 @@ export function collectSubmittedIntake(messages) {
     if (message?.role !== 'assistant' || !message.followUpSubmitted) continue
     for (const question of message.followUpQuestions || []) {
       if (!stepsByField.has(question?.id)) continue
-      questionCount += 1
+      if (coreIntakeFields.has(question.id)) questionCount += 1
       const value = valueForAnswer(question.id, message.followUpAnswers?.[question.id] || {})
       answers.set(question.id, value)
     }
@@ -84,6 +87,24 @@ export function applyCurrentIntakeAnswer(draftPatch, draft, intakeSubmission) {
     nextPatch.selections = { ...draft?.selections, ...nextPatch.selections, [field]: selectionValue }
   } else if (value) nextPatch[field] = value
   else if (!String(draft?.[field] || '').trim()) delete nextPatch[field]
+  return nextPatch
+}
+
+export function applySubmittedIntakeAnswers(draftPatch, draft, messages) {
+  let nextPatch = { ...draftPatch }
+  for (const message of Array.isArray(messages) ? messages : []) {
+    if (message?.role !== 'assistant' || !message.followUpSubmitted) continue
+    for (const question of message.followUpQuestions || []) {
+      if (!stepsByField.has(question?.id)) continue
+      const answer = message.followUpAnswers?.[question.id] || {}
+      const value = valueForAnswer(question.id, answer)
+      if (stepsByField.get(question.id).selection) {
+        nextPatch.selections = { ...draft?.selections, ...nextPatch.selections, [question.id]: answerChoiceValue(answer, value) }
+      } else if (value) {
+        nextPatch[question.id] = value
+      }
+    }
+  }
   return nextPatch
 }
 
@@ -112,14 +133,17 @@ export function nextComplaintIntakeQuestion(draft, messages) {
   const hasSubmittedIntake = conversation.some((message) => message?.role === 'assistant' && message.followUpSubmitted && (message.followUpQuestions || []).some((question) => stepsByField.has(question?.id)))
   const hasDraft = [...coreIntakeFields].some((field) => String(draft?.[field] || '').trim())
   if (!describesCase && !hasSubmittedIntake && !hasDraft) return null
-  if (submitted.questionCount >= MAX_INTAKE_QUESTIONS) return null
+  // Ask core incident facts one at a time, then present the legal checklist in
+  // one batch card so visitors can answer all its choices together.
+  if (submitted.questionCount < MAX_INTAKE_QUESTIONS) {
+    const next = coreIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !submitted.answeredFields.has(step.field))
+    if (next) return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
+  }
 
-  // Ask only for core incident facts. Identity and legal-form checklist fields
-  // stay editable in the preview instead of turning the chat into a long form.
-  const steps = coreIntakeSteps
-  const next = steps.find((step) => !String((step.selection ? draft?.selections?.[step.field] : draft?.[step.field]) || '').trim() && !submitted.answeredFields.has(step.field))
-  if (!next) return null
-  return [{ id: next.field, text: next.text, answerType: next.answerType || 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
+  const checklist = checklistStepsByType[draft?.type] || []
+  const pendingChecklist = checklist.filter((step) => !submitted.answeredFields.has(step.field))
+  if (pendingChecklist.length) return pendingChecklist.map((step) => ({ id: step.field, text: step.text, answerType: 'yes_no' }))
+  return null
 }
 
 const intakeFieldLabels = {
@@ -141,7 +165,8 @@ export function complaintIntakeCompletionMessage(draft) {
     ['자료', draft?.evidence],
   ].filter(([, value]) => String(value || '').trim()).map(([label, value]) => `${label}: ${String(value).trim().slice(0, 180)}`)
   const summary = facts.length ? facts.join(' · ') : '지금까지 알려주신 내용을 초안에 반영했어요.'
-  return `확인 질문은 여기서 마칠게요. 이번 대화에서 필요한 사건 내용은 정리했습니다.\n\n초안 요약: ${summary}\n\n오른쪽 고소장 미리보기에서 내용을 확인하고, 인적사항이나 더 필요한 내용은 직접 수정해 주세요.`
+  const checklistReview = draft?.type && draft.type !== 'general' ? '와 해당 사건 체크리스트' : ''
+  return `사건 내용 확인은 여기서 마칠게요.\n\n초안 요약: ${summary}\n\n오른쪽 **고소장 미리보기**에서 날짜·금액·상대방 정보${checklistReview}를 확인해 주세요. 비어 있는 인적사항이나 고칠 내용은 미리보기에서 수정하고, 제출 전에는 초안이 실제 사실과 맞는지 다시 확인해 주세요.`
 }
 
 export function alignMessageWithIntakeQuestion(message, questions) {

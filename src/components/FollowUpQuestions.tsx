@@ -25,6 +25,7 @@ export default function FollowUpQuestions({
     : Boolean(answers[question.id]?.choice))
   const shouldType = animateQuestions && !submitted
   const submitOnChoice = questions.length === 1 && questions[0].answerType === 'yes_no' && !questions[0].detailPrompt
+  const isChecklistBatch = questions.length > 1 && questions.every((question) => question.answerType === 'yes_no')
 
   return <motion.section
     className={`followup-card${submitted ? ' submitted' : ''}`}
@@ -34,8 +35,8 @@ export default function FollowUpQuestions({
     transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
   >
     <div className="followup-heading">
-      <strong>확인 질문</strong>
-      <span>{submitted ? '답변을 보냈어요' : '선택하거나 직접 입력해 주세요'}</span>
+      <strong>{isChecklistBatch ? '고소장 체크리스트' : '확인 질문'}</strong>
+      <span>{submitted ? '답변을 보냈어요' : isChecklistBatch ? '각 항목을 고른 뒤 한 번에 제출해 주세요' : '선택하거나 직접 입력해 주세요'}</span>
     </div>
     <div className="followup-list">
       {questions.map((question, index) => {
