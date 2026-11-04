@@ -62,10 +62,8 @@ function findRestorableConversation() {
 }
 
 export default function App() {
-  // The festival-ready experience is the main app screen at `/`.
-  const boothMode = true
-  const [conversations, setConversations] = useState<Conversation[]>(() => boothMode ? [] : loadConversations())
-  const [activeId, setActiveId] = useState<string | null>(() => boothMode ? null : findRestorableConversation()?.id || null)
+  const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
+  const [activeId, setActiveId] = useState<string | null>(() => findRestorableConversation()?.id || null)
   const [settings, setSettings] = useState<AiSettings>(loadSettings)
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [precedentOpen, setPrecedentOpen] = useState(false)
@@ -75,9 +73,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [input, setInput] = useState('')
-  const [startType, setStartType] = useState<ComplaintType>(() => boothMode ? 'general' : findRestorableConversation()?.draft?.type || 'general')
-  const [startMode, setStartMode] = useState<CaseMode>(() => boothMode ? 'complainant' : findRestorableConversation()?.caseMode || 'complainant')
-  const [boothScenarioId, setBoothScenarioId] = useState<string | null>(null)
+  const [startType, setStartType] = useState<ComplaintType>(() => findRestorableConversation()?.draft?.type || 'general')
+  const [startMode, setStartMode] = useState<CaseMode>(() => findRestorableConversation()?.caseMode || 'complainant')
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [notice, setNotice] = useState('')
@@ -95,7 +92,6 @@ export default function App() {
   const draft = active?.draft || blankDraft()
   const responseDraft = active?.responseDraft || blankResponseDraft()
   const currentMode = active?.caseMode || startMode
-  const selectedBoothScenario = demoScenarios.find((scenario) => scenario.id === boothScenarioId) || null
   const orderedConversations = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt)
   const isWelcome = !active || active.messages.length === 0
 
@@ -185,34 +181,11 @@ export default function App() {
   }
 
   useEffect(() => {
-    if (!boothMode) saveConversations(conversations)
-  }, [boothMode, conversations])
+    saveConversations(conversations)
+  }, [conversations])
   useEffect(() => {
     saveSettings(settings)
   }, [settings])
-  useEffect(() => {
-    if (!boothMode) return
-    try {
-      sessionStorage.removeItem('gosomi.ai-data-disclosure.v1')
-    } catch {
-      // The visible booth notice still explains the AI provider handoff.
-    }
-  }, [boothMode])
-  useEffect(() => {
-    if (!boothMode || busy) return
-    let idleTimer = 0
-    const resetIdleTimer = () => {
-      window.clearTimeout(idleTimer)
-      idleTimer = window.setTimeout(resetBoothExperience, 2 * 60 * 1000)
-    }
-    const activityEvents: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart', 'wheel']
-    activityEvents.forEach((eventName) => window.addEventListener(eventName, resetIdleTimer, { passive: true }))
-    resetIdleTimer()
-    return () => {
-      window.clearTimeout(idleTimer)
-      activityEvents.forEach((eventName) => window.removeEventListener(eventName, resetIdleTimer))
-    }
-  }, [boothMode, busy])
   useEffect(() => {
     scrollToBottom(false)
   }, [activeId, active?.messages.length, busy])
@@ -260,7 +233,7 @@ export default function App() {
       setVoiceListening(false)
     }
     const next = createConversation(type, mode)
-    setConversations((current) => boothMode ? [next] : [next, ...current])
+    setConversations((current) => [next, ...current])
     setActiveId(next.id)
     setStartType(type)
     setStartMode(mode)
@@ -268,35 +241,6 @@ export default function App() {
     setPreviewOpen(false)
     setSidebarOpen(false)
     return next
-  }
-
-  function resetBoothExperience() {
-    if (speechRecognitionRef.current) {
-      speechRecognitionRef.current.onresult = null
-      speechRecognitionRef.current.onend = null
-      speechRecognitionRef.current.stop()
-      speechRecognitionRef.current = null
-      setVoiceListening(false)
-    }
-    setConversations([])
-    setActiveId(null)
-    setInput('')
-    setStartType('general')
-    setStartMode('complainant')
-    setBoothScenarioId(null)
-    setPreviewOpen(false)
-    setSettingsOpen(false)
-    setPrecedentOpen(false)
-    setDemoOpen(false)
-    setNotice('')
-    setTypingMessageId(null)
-    setCompletedTypingId(null)
-    setAnimatedDraftFields({})
-    try {
-      sessionStorage.removeItem('gosomi.ai-data-disclosure.v1')
-    } catch {
-      // The next visitor still sees the persistent booth privacy notice.
-    }
   }
 
   function updateDraft(patch: Partial<ComplaintDraft>) {
@@ -366,15 +310,11 @@ export default function App() {
     }
     const cleanApiKey = settings.apiKey.replace(/\s+/g, '')
     if (!cleanApiKey) {
-      if (!boothMode) setSettingsOpen(true)
-      setNotice(boothMode ? '체험 준비가 아직 끝나지 않았어요. 부스 운영자에게 알려주세요.' : '대화를 시작하려면 AI API 키를 입력해주세요.')
+      setSettingsOpen(true)
+      setNotice('대화를 시작하려면 AI API 키를 입력해주세요.')
       return
     }
     if (!isValidApiKeyFormat(cleanApiKey)) {
-      if (boothMode) {
-        setNotice('AI 연결을 확인하지 못했어요. 부스 운영자에게 알려주세요.')
-        return
-      }
       setSettings((current) => ({ ...current, apiKey: '' }))
       setSettingsOpen(true)
       setNotice('API 키 입력란에 한글이나 잘못된 문자가 들어갔습니다. 영문·숫자로 된 API 키(예: AIza...)를 다시 입력해주세요.')
@@ -592,12 +532,6 @@ export default function App() {
   }
 
   function selectDemoScenario(scenario: DemoScenario) {
-    if (boothMode) {
-      setBoothScenarioId(scenario.id)
-      newConversation(scenario.type, scenario.prompt, scenario.mode)
-      setDemoOpen(false)
-      return
-    }
     if (active && (active.messages.length > 0 || Boolean(active.receivedDocuments?.length))) {
       newConversation(scenario.type, scenario.prompt, scenario.mode)
     } else {
@@ -622,8 +556,8 @@ export default function App() {
     setPreviewWidth(Math.max(380, Math.min(previewResizeMax, window.innerWidth - clientX)))
   }
 
-  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}${sidebarCollapsed ? ' sidebar-is-collapsed' : ''}${boothMode ? ' booth-mode' : ''}`} style={{ '--preview-width': `${previewWidth}px` } as CSSProperties}>
-    {!boothMode && <aside id="conversation-sidebar" className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
+  return <MotionConfig reducedMotion="user"><div className={`app-shell${previewOpen ? ' preview-is-open' : ''}${sidebarCollapsed ? ' sidebar-is-collapsed' : ''}`} style={{ '--preview-width': `${previewWidth}px` } as CSSProperties}>
+    <aside id="conversation-sidebar" className={`sidebar ${sidebarOpen ? 'sidebar-open' : ''}`}>
       <div className="sidebar-head">
         <button className="brand" onClick={() => { setActiveId(null); setPreviewOpen(false); setSidebarOpen(false) }} aria-label="고소미 홈으로">
           <img src="/gosomi-logo.png" alt="고소미 고소도우미" />
@@ -651,68 +585,27 @@ export default function App() {
         <button className="sidebar-settings" onClick={() => setSettingsOpen(true)}><span className="sidebar-settings-icon"><KeyRound size={18} /></span><span><strong>API 연결 설정</strong><small>{settings.apiKey ? `${settings.provider} 키 입력됨 · 연결 확인 전` : '내 API 키 입력하기'}</small></span><ArrowRight size={17} /></button>
         <p>대화 기록은 이 브라우저에 저장됩니다.</p>
       </div>
-    </aside>}
+    </aside>
 
-    {!boothMode && sidebarOpen && <button className="mobile-sidebar-scrim" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)} />}
+    {sidebarOpen && <button className="mobile-sidebar-scrim" aria-label="메뉴 닫기" onClick={() => setSidebarOpen(false)} />}
 
     <main className="workspace">
-      <header className={`topbar${boothMode ? ' booth-topbar' : ''}`}>
-        {boothMode ? <>
-          <div className="booth-brand-lockup">
-            <img src="/gosomi-logo.png" alt="고소미" />
-            <div><strong>SW 페스티벌 체험</strong><span>가상 사례로 사건 정리 과정을 살펴보세요</span></div>
-          </div>
-          <div className="topbar-actions booth-topbar-actions">
-            <button className="booth-settings-button" type="button" onClick={() => setSettingsOpen(true)}><KeyRound size={16} /><span>운영 설정</span></button>
-            {active?.messages.length ? <button className="topbar-link booth-preview-link" onClick={() => setPreviewOpen(true)}><FileText size={18} /><span>{currentMode === 'respondent' ? '대응 메모 보기' : '고소장 미리보기'}</span></button> : null}
-            {(active || boothScenarioId) && <button className="booth-reset-button" onClick={resetBoothExperience} disabled={busy || uploading}>{active?.messages.length ? '다음 체험' : '사례 다시 고르기'}</button>}
-          </div>
-        </> : <>
-          <div className="topbar-left">
-            <button className="desktop-sidebar-toggle icon-button" aria-label={sidebarCollapsed ? '대화 기록 열기' : '대화 기록 닫기'} aria-controls="conversation-sidebar" aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? '대화 기록 열기' : '대화 기록 닫기'} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
-            <button className="mobile-menu-button icon-button" aria-label="대화 목록 열기" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
-            <div className="topbar-title"><span className="topbar-eyebrow">{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성 도움'}</span><strong>{active ? active.title : '새로운 대화'}</strong></div>
-          </div>
-          <div className="topbar-actions">
-            <button className="topbar-link" onClick={() => setPrecedentOpen(true)}><BookOpen size={18} /><span>판례 검색</span>{Boolean(active?.precedents.length) && <b>{active?.precedents.length}</b>}</button>
-            <button className="topbar-link" aria-label="가상 사례로 빠르게 체험" onClick={() => setDemoOpen(true)} disabled={busy || uploading}><Play size={17} /><span>빠른 체험</span></button>
-            <button className="topbar-link topbar-preview" onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={18} /><span>{currentMode === 'respondent' ? '대응 메모' : '고소장 미리보기'}</span></button>
-            <button className="topbar-avatar" onClick={() => setSettingsOpen(true)} aria-label="API 설정 열기"><KeyRound size={17} /></button>
-          </div>
-        </>}
+      <header className="topbar">
+        <div className="topbar-left">
+          <button className="desktop-sidebar-toggle icon-button" aria-label={sidebarCollapsed ? '대화 기록 열기' : '대화 기록 닫기'} aria-controls="conversation-sidebar" aria-expanded={!sidebarCollapsed} title={sidebarCollapsed ? '대화 기록 열기' : '대화 기록 닫기'} onClick={() => setSidebarCollapsed((collapsed) => !collapsed)}>{sidebarCollapsed ? <PanelLeftOpen size={19} /> : <PanelLeftClose size={19} />}</button>
+          <button className="mobile-menu-button icon-button" aria-label="대화 목록 열기" onClick={() => setSidebarOpen(true)}><Menu size={21} /></button>
+          <div className="topbar-title"><span className="topbar-eyebrow">{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성 도움'}</span><strong>{active ? active.title : '새로운 대화'}</strong></div>
+        </div>
+        <div className="topbar-actions">
+          <button className="topbar-link" onClick={() => setPrecedentOpen(true)}><BookOpen size={18} /><span>판례 검색</span>{Boolean(active?.precedents.length) && <b>{active?.precedents.length}</b>}</button>
+          <button className="topbar-link" aria-label="가상 사례로 빠르게 체험" onClick={() => setDemoOpen(true)} disabled={busy || uploading}><Play size={17} /><span>빠른 체험</span></button>
+          <button className="topbar-link topbar-preview" onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={18} /><span>{currentMode === 'respondent' ? '대응 메모' : '고소장 미리보기'}</span></button>
+          <button className="topbar-avatar" onClick={() => setSettingsOpen(true)} aria-label="API 설정 열기"><KeyRound size={17} /></button>
+        </div>
       </header>
 
-      <div className={`chat-scroll${boothMode ? ' booth-chat-scroll' : ''}`} ref={chatScrollRef}>
-        {!active || active.messages.length === 0 ? boothMode ? <div className="booth-welcome">
-          <section className="booth-welcome-copy">
-            <h1>{selectedBoothScenario ? '이 가상 사례로 시작해보세요' : '가상 사건으로 고소미를 체험해보세요'}</h1>
-            <p>{selectedBoothScenario ? '예시 문장을 확인하고, 아래 버튼을 누르면 사건 정리 대화가 시작됩니다.' : '사례를 하나 고르면 사건 정리와 고소장 작성 또는 대응 메모까지 이어지는 과정을 체험할 수 있어요.'}</p>
-            <div className="booth-privacy-note">
-              <ShieldCheck size={20} />
-              <div><strong>가상 사례만 사용하세요. 실제 사건·이름·연락처는 입력하지 마세요.</strong><span>입력한 대화는 이 기기에 저장되지 않지만, AI 답변을 위해 선택한 제공자에게 전송됩니다. 2분간 조작이 없으면 체험 내용이 지워지고 초기화됩니다.</span></div>
-            </div>
-          </section>
-          {selectedBoothScenario ? <section className="booth-scenario-review" aria-labelledby="booth-scenario-title">
-            <div className="booth-scenario-review-heading">
-              <div><h2 id="booth-scenario-title">{selectedBoothScenario.label}</h2><p>{selectedBoothScenario.mode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} · 가상 인물과 상황</p></div>
-              <button className="booth-change-scenario" type="button" onClick={resetBoothExperience}>다른 사례 고르기</button>
-            </div>
-            <label className="booth-prompt-label" htmlFor="booth-scenario-prompt">체험할 내용</label>
-            <textarea id="booth-scenario-prompt" className="booth-prompt-editor" value={input} onChange={(event) => setInput(event.target.value)} aria-label="가상 사례 내용 수정" />
-            {!settings.apiKey && <p className="booth-readiness-note" role="status">AI 연결을 확인해야 체험을 시작할 수 있어요. 부스 운영자에게 알려주세요.</p>}
-            <div className="booth-start-row">
-              <span>실제 이름·연락처·사건 내용은 입력하지 마세요.</span>
-              <button className="booth-start-button" type="button" onClick={() => void handleSend()} disabled={!input.trim() || busy || uploading || !settings.apiKey}>{busy ? '응답을 준비하고 있어요' : '이 사례로 체험 시작'}</button>
-            </div>
-          </section> : <section className="booth-scenario-picker" aria-label="체험할 가상 사례 선택">
-            {demoScenarios.map((scenario) => <button className="booth-scenario-option" type="button" key={scenario.id} onClick={() => selectDemoScenario(scenario)}>
-              <strong>{scenario.label}</strong>
-              <span className="booth-scenario-mode">{scenario.mode === 'respondent' ? '고소장 대응' : '고소장 작성'}</span>
-              <span className="booth-scenario-summary">{scenario.summary}</span>
-              <span className="booth-scenario-action">사례 선택 <ArrowRight size={16} /></span>
-            </button>)}
-          </section>}
-        </div> : <div className="welcome">
+      <div className="chat-scroll" ref={chatScrollRef}>
+        {!active || active.messages.length === 0 ? <div className="welcome">
           <div className="welcome-intro">
             <span className="welcome-kicker">{startMode === 'respondent' ? '고소장 대응' : '사건 정리'}</span>
             <WelcomeTypedHeading key={`${activeId || 'welcome'}-${startMode}`} respondent={startMode === 'respondent'} />
@@ -743,7 +636,7 @@ export default function App() {
             {startMode === 'complainant' && <button onClick={() => { ensureConversation(startType); setPreviewOpen(true) }}><FileText size={16} /> 고소장 양식 보기</button>}
           </div>
           <p className="welcome-privacy"><ShieldCheck size={14} /> {startMode === 'respondent' ? '첨부 문서를 분석하면 내용이 선택한 AI 제공자에게 전송됩니다. 이름·주소·사건번호 등은 먼저 가려주세요.' : '대화와 초안은 이 브라우저에 저장됩니다. 전송 시 선택한 AI 제공자에게 전달되며, 답변은 검토용입니다.'} 음성 인식 중 음성이 브라우저 제공 서비스로 전송될 수 있습니다.</p>
-        </div> : <div className={`message-stream${boothMode ? ' booth-message-stream' : ''}`}>
+        </div> : <div className="message-stream">
           <div className="stream-intro"><span>{currentMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'}</span><small>AI 답변은 제출 전 확인이 필요합니다.</small></div>
           {active.messages.map((message, messageIndex) => <div className={`message-row ${message.role}${message.role === 'assistant' && typingMessageId === message.id ? ' assistant-speaking' : ''}`} key={message.id}>
             {message.role === 'assistant' && <span className={`assistant-avatar${typingMessageId === message.id ? ' is-speaking' : ''}`} aria-hidden="true" />}
@@ -790,11 +683,11 @@ export default function App() {
         </div>}
       </div>
 
-      {active?.messages.length ? <div className={`composer-zone${boothMode ? ' booth-composer-zone' : ''}`}>
-        {!boothMode && <div className="quick-prompts">
+      {active?.messages.length ? <div className="composer-zone">
+        <div className="quick-prompts">
           <button onClick={() => setPrecedentOpen(true)}><BookOpen size={15} /> 판례 검색</button>
           <button onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={15} /> {currentMode === 'respondent' ? '대응 메모 보기' : '고소장 보기'}</button>
-        </div>}
+        </div>
         <div className="composer">
           <div className="composer-input-row">
             {currentMode === 'respondent' && <ReceivedDocuments compact documents={active.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('새로 첨부한 고소장 내용을 읽고 기존 대응 메모에 반영해줘.')} />}
@@ -802,17 +695,14 @@ export default function App() {
           </div>
           <div className="composer-bottom"><span>{voiceListening ? '듣고 있어요 · 마이크 버튼을 눌러 마치세요.' : 'Enter 전송 · Shift + Enter 줄바꿈'}</span><div className="composer-actions"><button className={`voice-input-button${voiceListening ? ' listening' : ''}`} type="button" aria-label={voiceListening ? '음성 입력 마치기' : '음성 입력 시작'} aria-pressed={voiceListening} title={voiceListening ? '음성 입력 마치기' : '음성으로 입력'} onClick={toggleVoiceInput} disabled={busy || uploading}>{voiceListening ? <MicOff size={18} /> : <Mic size={18} />}</button><button className="send-button" aria-label="메시지 보내기" disabled={!input.trim() || busy || uploading} onClick={() => handleSend()}><Send size={18} /></button></div></div>
         </div>
-        <p className="composer-note">{boothMode ? '가상 사례로 체험해주세요. 실제 개인정보는 입력하지 마세요. 대화는 이 기기에 저장되지 않습니다.' : active?.caseMode === 'respondent' ? '대화와 첨부 문서는 선택한 AI 제공자에게 전송됩니다. 개인정보를 가리고 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '대화와 고소장 초안은 답변을 위해 선택한 AI 제공자에게 전송됩니다. 제출 전 사실관계와 초안을 직접 확인해주세요.'} {!boothMode && '음성 인식 중 음성이 브라우저 제공 서비스로 전송될 수 있습니다.'}</p>
+        <p className="composer-note">{active?.caseMode === 'respondent' ? '대화와 첨부 문서는 선택한 AI 제공자에게 전송됩니다. 개인정보를 가리고 공유해주세요. AI 답변은 법률 대리나 수사기관의 판단이 아닙니다.' : '대화와 고소장 초안은 답변을 위해 선택한 AI 제공자에게 전송됩니다. 제출 전 사실관계와 초안을 직접 확인해주세요.'} 음성 인식 중 음성이 브라우저 제공 서비스로 전송될 수 있습니다.</p>
       </div> : null}
     </main>
 
-    {!boothMode && (currentMode === 'respondent'
+    {currentMode === 'respondent'
       ? <ResponsePanel draft={responseDraft} open={previewOpen} onOpen={() => { ensureConversation(startType, 'respondent'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateResponseDraft} />
-      : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />)}
-    {boothMode && (currentMode === 'respondent'
-      ? <ResponsePanel draft={responseDraft} open={previewOpen} onOpen={() => setPreviewOpen(true)} onClose={() => setPreviewOpen(false)} onChange={updateResponseDraft} />
-      : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => setPreviewOpen(true)} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />)}
-    {!boothMode && previewOpen && <div
+      : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
+    {previewOpen && <div
       className="preview-resize-handle"
       role="separator"
       aria-orientation="vertical"
@@ -831,7 +721,7 @@ export default function App() {
       }}
     />}
     <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={settings} onChange={setSettings} />
-    {!boothMode && <DemoScenarioDialog open={demoOpen} onOpenChange={setDemoOpen} onSelect={selectDemoScenario} />}
+    <DemoScenarioDialog open={demoOpen} onOpenChange={setDemoOpen} onSelect={selectDemoScenario} />
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}
   </div></MotionConfig>
