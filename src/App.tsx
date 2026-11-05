@@ -680,10 +680,6 @@ export default function App() {
       </div>
 
       {active?.messages.length ? <div className="composer-zone">
-        <div className="quick-prompts">
-          <button onClick={() => setPrecedentOpen(true)}><BookOpen size={15} /> 판례 검색</button>
-          <button onClick={() => { ensureConversation(startType, currentMode); setPreviewOpen(true) }}><FileText size={15} /> {currentMode === 'respondent' ? '대응 메모 보기' : '고소장 보기'}</button>
-        </div>
         <div className="composer">
           <div className="composer-input-row">
             {currentMode === 'respondent' && <ReceivedDocuments compact documents={active.receivedDocuments || []} busy={busy} uploading={uploading} onAdd={addReceivedDocuments} onRemove={removeReceivedDocument} onAnalyze={() => void handleSend('새로 첨부한 고소장 내용을 읽고 기존 대응 메모에 반영해줘.')} />}
