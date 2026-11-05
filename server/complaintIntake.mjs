@@ -12,7 +12,6 @@ export const complaintIntakeSteps = [
   { field: 'relatedCase', text: '같은 사건으로 신고·수사·재판이 진행 중이거나 접수한 적이 있나요? 모르면 건너뛰어도 됩니다.' },
 ]
 
-export const MAX_INTAKE_QUESTIONS = 3
 const coreIntakeFields = new Set(['incidentDate', 'incidentPlace', 'incidentSummary', 'damage', 'evidence'])
 const coreIntakeSteps = complaintIntakeSteps.filter((step) => coreIntakeFields.has(step.field))
 const checklistStepsByType = Object.fromEntries(Object.entries(checklistQuestions).map(([type, questions]) => [type,
@@ -60,17 +59,15 @@ function valueForAnswer(field, answer) {
 
 export function collectSubmittedIntake(messages) {
   const answers = new Map()
-  let questionCount = 0
   for (const message of Array.isArray(messages) ? messages : []) {
     if (message?.role !== 'assistant' || !message.followUpSubmitted) continue
     for (const question of message.followUpQuestions || []) {
       if (!stepsByField.has(question?.id)) continue
-      if (coreIntakeFields.has(question.id)) questionCount += 1
       const value = valueForAnswer(question.id, message.followUpAnswers?.[question.id] || {})
       answers.set(question.id, value)
     }
   }
-  return { answeredFields: new Set(answers.keys()), questionCount }
+  return { answeredFields: new Set(answers.keys()) }
 }
 
 function answerChoiceValue(answer, value) {
@@ -128,6 +125,7 @@ export function isSimpleIntakeSubmission(intakeSubmission) {
 export function nextComplaintIntakeQuestion(draft, messages) {
   const conversation = Array.isArray(messages) ? messages : []
   const latestUserText = [...conversation].reverse().find((message) => message?.role === 'user')?.text || ''
+  if (/(?:질문|확인|작성)?\s*(?:그만|멈춰|중단)|더\s*묻지\s*마/u.test(latestUserText)) return null
   const describesCase = /고소장.{0,8}(작성|초안)|고소.{0,8}(하고 싶|하려)|피해|사건|사기|폭행|명예훼손|모욕|경찰.{0,8}(연락|신고)|돈을 보냈|이체|계약/.test(latestUserText) || latestUserText.trim().length >= 70
   const submitted = collectSubmittedIntake(conversation)
   const hasSubmittedIntake = conversation.some((message) => message?.role === 'assistant' && message.followUpSubmitted && (message.followUpQuestions || []).some((question) => stepsByField.has(question?.id)))
@@ -135,10 +133,8 @@ export function nextComplaintIntakeQuestion(draft, messages) {
   if (!describesCase && !hasSubmittedIntake && !hasDraft) return null
   // Ask core incident facts one at a time, then present the legal checklist in
   // one batch card so visitors can answer all its choices together.
-  if (submitted.questionCount < MAX_INTAKE_QUESTIONS) {
-    const next = coreIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !submitted.answeredFields.has(step.field))
-    if (next) return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
-  }
+  const next = coreIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !submitted.answeredFields.has(step.field))
+  if (next) return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
 
   const checklist = checklistStepsByType[draft?.type] || []
   const pendingChecklist = checklist.filter((step) => !submitted.answeredFields.has(step.field))
@@ -150,10 +146,10 @@ const intakeFieldLabels = {
   incidentDate: '사건 날짜', incidentPlace: '사건 장소', incidentSummary: '사건 경위', damage: '피해 내용', evidence: '관련 자료',
 }
 
-export function complaintIntakeProgressMessage(questionId, draft, skipped, questionCount) {
+export function complaintIntakeProgressMessage(questionId, draft, skipped) {
   const label = intakeFieldLabels[questionId] || '이 항목'
   const acknowledgement = skipped ? `${label}은 비워둘게요.` : `${label}을 초안에 반영했어요.`
-  return `${acknowledgement} 확인된 내용은 오른쪽 초안에 바로 반영됩니다. 이번 대화에서는 필요한 내용만 최대 ${MAX_INTAKE_QUESTIONS}개까지 확인해요. (${Math.min(questionCount, MAX_INTAKE_QUESTIONS)}/${MAX_INTAKE_QUESTIONS})`
+  return `${acknowledgement} 확인된 내용은 오른쪽 초안에 바로 반영됩니다. 필요한 핵심 항목만 순서대로 확인하고, 모르는 내용은 건너뛸 수 있어요.`
 }
 
 export function complaintIntakeCompletionMessage(draft) {

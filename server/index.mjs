@@ -2,7 +2,7 @@ import 'dotenv/config'
 import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, applySubmittedIntakeAnswers, collectSubmittedIntake, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, MAX_INTAKE_QUESTIONS, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
+import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, applySubmittedIntakeAnswers, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
 import { enrichAccusedAccount, extractAccusedIdentity, extractComplainantIdentity } from './explicitFacts.mjs'
 
 const app = express()
@@ -166,7 +166,6 @@ const responseFields = ['receivedDocument', 'agency', 'receivedAt', 'appearanceD
 
 function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft = {}, messages = [], documentInput = undefined, demo = false) {
   const isDemoOpening = demo === true && !messages.some((message) => message?.role === 'assistant')
-  const intakeQuestionCount = collectSubmittedIntake(messages).questionCount
   const hasCollectedDraftFacts = Object.entries(draft || {}).some(([key, value]) => key !== 'type' && key !== 'selections' && typeof value === 'string' && value.trim())
   const hasPriorAssistantReply = hasCollectedDraftFacts || (Array.isArray(messages) && messages.some((message) => message?.role === 'assistant' && Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0))
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
@@ -185,7 +184,7 @@ function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft
 현재는 "고소장을 받았어요" 대응 모드입니다.
 사용자는 고소장, 경찰 출석요구, 수사기관 연락 등을 받았을 수 있습니다. 먼저 어떤 문서를 언제 누구에게서 받았는지, 출석 일정이나 답변 기한이 있는지, 표시된 혐의가 무엇인지 확인하세요. 실제 문서에 적힌 정보와 사용자의 기억을 구분하고, 문서의 개인정보는 가리고 필요한 부분만 공유하도록 안내하세요.
 지금 당장 할 일로 원본 문서와 관련 대화·거래 내역을 보존하고, 연락한 기관의 공식 대표번호로 연락의 진위를 확인하도록 안내할 수 있습니다. 임박한 출석 일정이나 구속·접근금지 등 긴급한 상황에는 변호사 또는 공공 법률상담을 빠르게 알아보도록 안내하세요. 법률상 기한이나 절차를 추측해 단정하지 마세요.
-상대방의 "약점"이나 무죄를 단정하지 말고, 주장·제시된 근거·아직 확인되지 않은 점·사용자가 확인할 자료를 나눠 설명하세요. 문서 안의 날짜·금액 등 불일치 후보는 원문과 대조하도록 표시하세요. 증거 삭제·수정, 상대방 압박, 진술 맞추기 등 수사 방해 행동은 권하지 마세요.
+상대방의 "약점"이나 무죄를 단정하지 말고, 주장·제시된 근거·아직 확인되지 않은 점·사용자가 확인할 자료를 나눠 설명하세요. 문서 안의 날짜·금액 등 불일치 후보는 원문과 대조하도록 표시하세요. 증거 삭제·수정, 상대방 압박, 진술 맞추기 등 수사 방해 행동은 권하지 마세요. 답변은 먼저 사용자의 질문에 답한 다음, 필요할 때만 "상대방의 주장", "확인된 사실", "확인할 점", "지금 할 일"로 나눠 쓰세요. 문서가 첨부된 경우 문서 내용과 사용자 설명의 출처를 구별하세요.
 이 모드에서는 고소장 작성 필드(draftPatch)를 채우지 마세요. 대신 responsePatch에 현재 대화에서 확인된 정보만 채우세요. 각 값은 짧은 사실 중심 문장으로 쓰고, 모르는 값은 비워 두세요. disputedPoints는 상대 주장과 사용자 설명이 다른 부분 또는 확인할 불일치 후보이며 유무죄 판단이 아닙니다. nextSteps는 확인할 실무 행동만 쓰고 법정 기한을 추측하지 마세요. 기존 responseDraft 값은 명확한 정정이 없으면 지우지 마세요. 의견서 초안이 요청되면 확인된 사실과 미확인 사항을 분리한 검토용 구조만 제시하고, 제출 전에 변호사 검토가 필요할 수 있음을 알려주세요.
 ` : ''
   const attachedDocumentGuidance = caseMode === 'respondent' && (String(documentInput?.text || '').trim() || (Array.isArray(documentInput?.images) && documentInput.images.length)) ? `
@@ -201,14 +200,14 @@ ${hasPriorAssistantReply
 사용자가 대화나 첨부자료에서 이미 제공한 인적사항·사건정보를 빠뜨리지 말고 draftPatch에 반영하세요. 초안 필드에 값이 있는데도 그 값을 미리보기에서 다시 입력하라고 안내하지 마세요. 미리보기 직접 입력 안내는 대화에 나오지 않은 필수 정보가 있을 때 그 누락 항목에 한해서만 하세요. 인적사항을 새로 묻지는 말되, 사용자가 명시적으로 제공한 정보는 초안에 넣으세요.
 draftPatch 필드 매핑: complainantName/complainantBirth/complainantAddress/complainantPhone은 사용자가 본인 정보라고 분명히 밝힌 값만, accusedName/accusedAddress/accusedPhone은 상대방 정보라고 분명히 밝힌 값만 넣으세요. 판매자·상대방의 플랫폼 닉네임이나 아이디는 accusedOnlineId, 상대방 계좌번호와 예금주명은 accusedAccount에 함께 넣으세요. incidentDate·incidentTime·incidentPlace는 확인된 일시·시간·장소, incidentSummary는 시간 순서에 따른 행위와 대화, damage는 금전·신체 피해, reason은 고소에 이르게 된 이유, evidence는 대화 캡처·이체 내역·신분증 사진 등 실제 언급한 자료, request는 처벌 의사나 수사 요청, relatedCase는 이미 진행 중인 사건·수사 정보입니다. 값을 다른 필드에 몰아넣지 말고, 일부만 확인됐으면 그 부분만 작성하세요. 마스킹된 번호는 마스킹 상태 그대로 보존하세요.
 AI가 확인할 사건 내용의 순서는 피해 날짜 → 시간 → 장소 → 사건 경위 → 피해 내용·금액 → 고소 이유 → 증거자료 → 처벌 희망·요청 → 관련 수사·재판입니다.
-추가 질문은 사건 날짜, 장소, 사건 경위, 피해, 보유 자료 중 초안을 이해하는 데 정말 필요한 것만 한 번에 하나씩 하세요. 이 핵심 사건 확인 질문은 최대 ${MAX_INTAKE_QUESTIONS}개입니다. 이름·주소·전화번호는 채팅으로 묻지 마세요. 사건 유형이 fraud/defamation/assault로 정해지면 해당 고소장 체크리스트는 서버가 별도 카드 하나에 모두 묶어 한꺼번에 제시합니다. 체크리스트 항목을 message나 questions에서 하나씩 물어보지 마세요. 핵심 사건 확인과 체크리스트 답변이 끝나면 더 묻지 말고, 확인된 사실의 짧은 요약, 초안에 반영한 내용, 사용자가 지금 확인할 구체적인 다음 행동을 답하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
+추가 질문은 날짜·장소·사건 경위·피해·보유 자료 중 초안에 꼭 필요한 미확인 항목을 모두 확인할 때까지 한 번에 하나씩 하세요. 질문 개수 제한은 두지 않되 이미 답변했거나 건너뛴 항목은 반복하지 말고, 사용자가 그만하기를 원하면 즉시 멈추세요. 이름·주소·전화번호는 채팅으로 묻지 마세요. 사건 유형이 fraud/defamation/assault로 정해지면 해당 고소장 체크리스트는 서버가 별도 카드 하나에 모두 묶어 한꺼번에 제시합니다. 체크리스트 항목을 message나 questions에서 하나씩 물어보지 마세요. 핵심 사건 확인과 체크리스트 답변이 끝나면 더 묻지 말고, 확인된 사실과 초안에 반영한 내용을 간단히 정리하고 사용자가 지금 확인할 구체적인 다음 행동을 안내하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
 사용자가 '모름', '없음', '건너뛰기', '나중에 직접 입력'이라고 하면 해당 항목을 비워 두세요. 같은 항목을 다시 묻지 말고, 초안에서 확인 가능한 사실과 다음 확인 방법을 안내하세요. 이미 메시지나 draft에 답이 있는 항목은 반복 질문하지 마세요.
 ` : ''
   return `당신은 한국어로 대화하는 ${caseMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
 사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 고소장 작성 모드에서는 핵심 사건 질문은 한 번에 하나씩, 사건 체크리스트는 한 카드에 모두 묶어 물으세요. 수령 대응 모드에서는 핵심 질문을 최대 2개까지 하되, 이미 받은 답을 반복하거나 대화를 끝없이 이어가지 마세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
-사건 답변은 가능한 경우 **핵심 요약 → 확인된 사실과 추가 확인 사항 → 관련 법적 쟁점과 근거 → 지금 할 일** 순서로 작성하세요. 해당 정보가 없거나 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 표시하세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
+답변은 질문에 먼저 직접 답하고, 간단한 질문에는 자연스럽고 짧게 답하세요. 사건 상담에서만 필요한 항목을 골라 핵심 답변, 확인된 사실과 미확인 사항, 관련 쟁점·검증된 근거, 구체적인 다음 행동 순으로 설명하세요. 모든 답변에 항목을 억지로 붙이거나 같은 내용을 반복하지 마세요. 사용자가 문서 작성을 요청하면 요청한 문서 형식으로 답하세요. 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 밝혀 주세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
 아래 verifiedCases는 공식 판례 검색에서 확인한 결과입니다. 현재 질문과 실제 쟁점이 맞는 판례가 있으면 답변 끝에 **참고 판례** 항목을 두고, 사건번호·선고일·법원과 핵심 법리를 짧게 설명한 뒤 반드시 제공된 URL을 마크다운 링크로 연결하세요. 요약이 비어 있거나 쟁점 관련성이 불분명하면 인용하지 마세요. 검색 결과를 사건의 결론이나 승소 가능성을 뒷받침하는 것처럼 과장하지 말고, 판례의 사실관계가 다르면 그 차이를 밝혀 주세요. 목록에 없는 판례·사건번호·링크를 만들지 마세요.
 ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : `고소장 작성 모드에서는 사용자의 사건 설명과 후속 답변에서 확인된 사실을 매 응답마다 draftPatch의 알맞은 필드에 반영하세요. 채팅 답변(message)에만 사실을 적고 draftPatch를 비워 두지 마세요. 일시·장소·행위·피해·증거·상대 식별정보를 각각 대응하는 필드에 넣고, 사건 유형이 명확하면 type도 fraud/defamation/assault/general 중 선택하세요. 선택형 질문에 답할 근거가 분명한 경우 draftPatch.selections의 해당 키도 채우세요. 사용자가 말하지 않은 정보는 만들지 말고, 불확실한 값은 비워 두고 질문하세요. 기존 값을 임의로 지우지 마세요.`}
@@ -216,8 +215,7 @@ ${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 �
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
 ${modeGuidance}
 ${attachedDocumentGuidance}
-${isDemoOpening ? '이번 입력은 가상 체험 사례입니다. 제시된 사실만 사용하고, 실제 문서를 받거나 확인한 것처럼 말하지 마세요. 첫 답변은 사건 요약과 지금 채운 내용 중심으로 2~4문장만 간결하게 쓰세요. 확인 질문은 채팅 본문에 반복하지 마세요.' : ''}
-${caseMode === 'complainant' && intakeQuestionCount >= MAX_INTAKE_QUESTIONS ? `이번 대화의 구조화 질문 ${intakeQuestionCount}개가 한도에 도달했습니다. 더 이상 질문을 만들지 마세요. 현재까지 확인된 사실과 초안 상태를 요약하고, 사용자가 할 수 있는 구체적인 다음 행동을 안내하세요.` : ''}
+${isDemoOpening ? '이번 입력은 가상 체험 사례입니다. 제시된 사실만 사용하고, 실제 문서를 받거나 확인한 것처럼 말하지 마세요. 첫 답변은 사건 요약과 지금 채운 내용을 이해하기 쉽게 작성하세요. 확인 질문은 채팅 본문에 반복하지 마세요.' : ''}
 ${complainantFlow}
 ${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 JSON 객체 하나로만 답하세요. 최상위 키는 message(문자열), draftPatch(객체), responsePatch(객체), searchQuery(문자열), questions(배열)입니다. questions의 각 항목에는 id, text, answerType을 넣고 필요할 때만 detailPrompt를 넣으세요. message에는 이번 사용자 입력에 실제로 답하는 한국어를 작성하세요. 형식 설명이나 예시 문구를 답변으로 복사하지 마세요.
@@ -757,10 +755,9 @@ app.post('/api/chat', async (request, response) => {
       result.message = alignMessageWithIntakeQuestion(result.message, result.followUpQuestions)
       const hasIncidentDraft = ['incidentDate', 'incidentPlace', 'incidentSummary', 'damage', 'evidence'].some((field) => String(mergedDraft?.[field] || '').trim())
       if (intakeSubmission || (!result.followUpQuestions.length && hasIncidentDraft)) {
-        const questionCount = collectSubmittedIntake(messages).questionCount
         const skipped = Boolean(intakeSubmission && (intakeSubmission.choice === 'unknown' || /^(?:모름\s*\/\s*건너뛰기|건너뛰기)$/u.test(String(intakeSubmission.text || '').trim())))
         if (result.followUpQuestions.length && intakeSubmission) {
-          result.message = `${result.message}\n\n${complaintIntakeProgressMessage(intakeSubmission.questionId, mergedDraft, skipped, questionCount)}`
+          result.message = `${result.message}\n\n${complaintIntakeProgressMessage(intakeSubmission.questionId, mergedDraft, skipped)}`
         } else if (!result.followUpQuestions.length) {
           result.message = `${result.message}\n\n${complaintIntakeCompletionMessage(mergedDraft)}`
         }
