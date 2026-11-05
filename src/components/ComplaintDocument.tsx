@@ -329,7 +329,7 @@ function OfficialComplaint({
   if (type === 'assault' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 38, wantsPunishment ? 31.8 : 34)
   const checklistRows: Record<Exclude<ComplaintType, 'general'>, Record<string, number>> = {
     fraud: { fraudFamily: 49.5, fraudLivedTogether: 52, fraudKnewLong: 54.5, fraudContactable: 57, fraudPreviousTrade: 59.5, fraudPromise: 63.5, previousComplaint: 68, withdrawnComplaint: 72 },
-    defamation: { defamationFamily: 40.5, defamationKnown: 43, defamationIdentifiable: 46.2, defamationReputation: 49.7, defamationPublicPlace: 53, defamationOthersKnew: 57, defamationOneToOne: 63, previousComplaint: 73 },
+    defamation: { defamationFamily: 40.5, defamationKnown: 43, defamationIdentifiable: 46.2, defamationReputation: 49.7, defamationPublicPlace: 53, defamationOthersKnew: 57, defamationOneToOne: 63, previousComplaint: 66.8 },
     assault: { assaultSudden: 56, assaultArgument: 59.5, assaultWitness: 63, assaultCctv: 66, assaultWithdraw: 71, previousComplaint: 77, withdrawnComplaint: 82 },
   }
   const answerColumns: Record<Exclude<ComplaintType, 'general'>, Record<string, number>> = {
