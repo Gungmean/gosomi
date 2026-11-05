@@ -43,7 +43,7 @@ function needsSupplementalPage(draft: ComplaintDraft) {
     (draft.incidentTime && !formTimeParts(draft.incidentTime).hour) ||
     /경|쯤|무렵|대략|약/u.test(`${draft.incidentDate} ${draft.incidentTime}`),
   )
-  if (draft.type === 'assault') return Boolean(dateTimeNeedsNote || draft.incidentSummary || draft.damage || draft.evidence || draft.reason || draft.request || draft.relatedCase)
+  if (draft.type === 'assault') return Boolean(dateTimeNeedsNote || draft.incidentSummary || draft.damage || draft.evidence || draft.reason || draft.request || draft.relatedCase || draft.selections.assaultType === '기타')
   const singleLineFields = [
     [draft.complainantName, 12], [draft.complainantAddress, 34], [draft.complainantPhone, 20],
     [draft.accusedName, 12], [draft.accusedAddress, 34], [draft.accusedPhone, 20],
@@ -105,15 +105,16 @@ function OfficialComplaint({
         complainantName: { left: '24.5%', top: '16.3%', width: '20%' },
         complainantAddress: { left: '24.5%', top: '19.3%', width: '71%' },
         complainantPhone: { left: '24.5%', top: '22.4%', width: '71%' },
-        accusedName: { left: '24.5%', top: '40.1%', width: '20%' },
-        accusedAddress: { left: '24.5%', top: '43.2%', width: '71%' },
-        accusedPhone: { left: '24.5%', top: '46.3%', width: '71%' },
+        // The fraud form has an explanatory header row above the accused fields.
+        accusedName: { left: '24.5%', top: '39.6%', width: '20%' },
+        accusedAddress: { left: '24.5%', top: '42.7%', width: '71%' },
+        accusedPhone: { left: '24.5%', top: '45.8%', width: '71%' },
         accusedOnlineId: { left: '47%', top: '53.1%', width: '40%' },
-        accusedBank: { left: '23.5%', top: '56.7%', width: '19%' },
-        accusedAccount: { left: '59%', top: '56.7%', width: '28%' },
+        accusedBank: { left: '23.5%', top: '56.2%', width: '19%' },
+        accusedAccount: { left: '59%', top: '56.2%', width: '28%' },
       },
       second: {
-        complainantName: { left: '43%', top: '91.2%', width: '37%' },
+        complainantName: { left: '42.5%', top: '84.9%', width: '19%' },
         incidentPlace: { left: '36%', top: '8.7%', width: '52%' },
         incidentSummary: { left: '36%', top: '12%', width: '51.5%', height: '3.2%', size: '1.45cqw' },
         damage: { left: '42%', top: '15.9%', width: '32%' },
@@ -122,32 +123,32 @@ function OfficialComplaint({
     defamation: {
       first: {
         complainantName: { left: '24.5%', top: '16%', width: '20%' },
-        complainantAddress: { left: '24.5%', top: '19.1%', width: '71%' },
-        complainantPhone: { left: '24.5%', top: '22.1%', width: '71%' },
-        accusedName: { left: '24.5%', top: '38.4%', width: '20%' },
-        accusedAddress: { left: '24.5%', top: '41.5%', width: '71%' },
-        accusedOnlineId: { left: '47%', top: '47.7%', width: '47%' },
-        accusedPhone: { left: '24.5%', top: '50.8%', width: '71%' },
+        complainantAddress: { left: '24.5%', top: '19.3%', width: '71%' },
+        complainantPhone: { left: '24.5%', top: '22.4%', width: '71%' },
+        accusedName: { left: '24.5%', top: '37%', width: '20%' },
+        accusedAddress: { left: '24.5%', top: '40.1%', width: '71%' },
+        accusedOnlineId: { left: '47%', top: '46%', width: '47%' },
+        accusedPhone: { left: '24.5%', top: '48.8%', width: '71%' },
         incidentPlace: { left: '57%', top: '66%', width: '37%' },
-        incidentSummary: { left: '42%', top: '86%', width: '52%', height: '7%' },
+        incidentSummary: { left: '42%', top: '86%', width: '52%', height: '2.2%' },
       },
       second: {
-        complainantName: { left: '42.5%', top: '83.5%', width: '19%' },
+        complainantName: { left: '42.5%', top: '84.8%', width: '19%' },
       },
     },
     assault: {
       first: {
-        complainantName: { left: '25%', top: '16.1%', width: '20%' },
-        complainantAddress: { left: '25%', top: '19.1%', width: '71%' },
-        complainantPhone: { left: '25%', top: '22.2%', width: '71%' },
-        accusedName: { left: '25%', top: '39.2%', width: '20%' },
-        accusedAddress: { left: '25%', top: '42.3%', width: '71%' },
-        accusedPhone: { left: '25%', top: '45.3%', width: '71%' },
-        incidentPlace: { left: '35%', top: '71.8%', width: '60%' },
-        assaultBodyPart: { left: '37.5%', top: '77%', width: '56%', height: '4%' },
+        complainantName: { left: '25%', top: '17.8%', width: '20%' },
+        complainantAddress: { left: '25%', top: '20.9%', width: '71%' },
+        complainantPhone: { left: '25%', top: '24%', width: '71%' },
+        accusedName: { left: '25%', top: '39.7%', width: '20%' },
+        accusedAddress: { left: '25%', top: '43.1%', width: '71%' },
+        accusedPhone: { left: '25%', top: '46.5%', width: '71%' },
+        incidentPlace: { left: '35%', top: '73%', width: '60%' },
+        assaultBodyPart: { left: '37.5%', top: '75.4%', width: '56%', height: '4%' },
       },
       second: {
-        complainantName: { left: '43%', top: '87.5%', width: '37%' },
+        complainantName: { left: '42.5%', top: '85.4%', width: '19%' },
       },
     },
   }
@@ -177,13 +178,14 @@ function OfficialComplaint({
   if (type === 'defamation') {
     const channel = draft.selections.defamationChannel?.replace(/\s/g, '')
     const detailPositions: Record<string, Position> = {
-      직접들음: { left: '58%', top: '64.2%', width: '34%' },
-      인터넷: { left: '58%', top: '66.5%', width: '34%' },
-      게임채팅: { left: '58%', top: '71.4%', width: '34%' },
-      기타: { left: '53%', top: '76%', width: '39%' },
+      직접들음: { left: '58%', top: '63.4%', width: '34%' },
+      인터넷: { left: '58%', top: '65.7%', width: '34%' },
+      게임채팅: { left: '58%', top: '70.2%', width: '34%' },
+      기타: { left: '53%', top: '74.8%', width: '39%' },
     }
     const detail = channel && Object.entries(detailPositions).find(([key]) => channel.includes(key))?.[1]
     if (detail) firstPositions.incidentPlace = detail
+    else delete firstPositions.incidentPlace
   }
   const makeFields = (mapping: Record<string, Position>) => Object.entries(mapping)
     .filter(([field]) => values[field])
@@ -215,6 +217,7 @@ function OfficialComplaint({
 
   const needsAttachment = needsSupplementalPage(draft)
   const attachmentRows = [
+    { key: 'assaultType', label: '폭행 종류', value: type === 'assault' && draft.selections.assaultType === '기타' ? '기타' : '', animateKey: undefined },
     { key: 'complainantName', label: '고소인 성명', value: draft.complainantName, animateKey: animatedFields?.complainantName },
     { key: 'complainantAddress', label: '고소인 주소', value: draft.complainantAddress, animateKey: animatedFields?.complainantAddress },
     { key: 'complainantPhone', label: '고소인 연락처', value: draft.complainantPhone, animateKey: animatedFields?.complainantPhone },
@@ -250,9 +253,9 @@ function OfficialComplaint({
   }
   if (type === 'assault') {
     const assaultType: Record<string, [number, number]> = {
-      가정: [38, 58.2], 교제: [51.5, 58.2], 아동: [75, 58.2], 학교: [38, 60.8], 노인: [51.5, 60.8], 의료: [68.8, 60.8], 항공: [38, 63.1], 운전자: [57, 63.1], 일반: [75, 63.1],
+      가정: [37.1, 57.9], 교제: [51.1, 57.9], 아동: [74.5, 57.9], 학교: [37.1, 60.2], 노인: [51.1, 60.2], 의료: [67.1, 60.2], 항공: [37.1, 62.4], 운전자: [57.1, 62.4], 일반: [74.2, 62.4],
     }
-    const relationship: Record<string, [number, number]> = { 배우자: [38, 66], 가족: [50.4, 66], 연인: [68.8, 66], 친구: [38, 68.3], 모르는사람: [48.4, 68.3], 기타: [65.5, 68.3] }
+    const relationship: Record<string, [number, number]> = { 배우자: [37.1, 65.2], 가족: [50.1, 65.2], 연인: [68.4, 65.2], 친구: [37.1, 67.5], 모르는사람: [47.8, 67.5], 기타: [65, 67.5] }
     const markChoice = (selected: string | undefined, table: Record<string, [number, number]>, target = firstMarks) => {
       if (!selected) return
       const match = Object.entries(table).find(([label]) => selected.replace(/\s/g, '').includes(label))
@@ -260,20 +263,20 @@ function OfficialComplaint({
     }
     markChoice(draft.selections.assaultType, assaultType)
     markChoice(draft.selections.assaultRelation, relationship)
-    const injuryMark: Record<string, [number, number]> = { 부어오름: [38, 85.3], 피가남: [51.5, 85.3], 뼈가부러짐: [64.5, 85.3], 멍: [38, 87.7], 외부상처없음: [45.5, 87.7] }
+    const injuryMark: Record<string, [number, number]> = { 부어오름: [37.1, 84.7], 피가남: [51.1, 84.7], 뼈가부러짐: [64, 84.7], 멍: [37.1, 86.7], 외부상처없음: [45, 86.7], 기타: [37.1, 88.7] }
     const condition = draft.selections.assaultCondition?.replace(/\s/g, '')
     const conditionMatch = Object.entries(injuryMark).find(([label]) => condition?.includes(label))
     if (conditionMatch) addMark(firstMarks, ...conditionMatch[1])
-    const methodMark: Record<string, [number, number]> = { 멱살: [37.8, 6.6], 밀침: [57, 6.6], 잡아당김: [76, 6.6], 주먹: [37.8, 9.2], 발로: [58, 9.2], 물건: [37.8, 11.8], 흉기: [37.8, 14.3], 기타: [37.8, 16.7] }
+    const methodMark: Record<string, [number, number]> = { 멱살: [37.1, 9], 밀침: [56.1, 9], 잡아당김: [69, 9], 주먹: [37.1, 11.2], 발로: [56.1, 11.2], 물건: [37.1, 13.3], 흉기: [37.1, 15.5], 기타: [37.1, 17.6] }
     const method = draft.selections.assaultMethod?.replace(/\s/g, '')
     const methodMatch = Object.entries(methodMark).find(([label]) => method?.includes(label))
     if (methodMatch) addMark(secondMarks, ...methodMatch[1])
     const hospital = draft.selections.assaultHospital
-    if (hospital === '치료받음') addMark(secondMarks, 38, 19.2)
-    if (hospital === '치료받지 않음') addMark(secondMarks, 69, 19.2)
+    if (hospital === '치료받음') addMark(secondMarks, 37.1, 20.1)
+    if (hospital === '치료받지 않음') addMark(secondMarks, 68.1, 20.1)
     const mutual = draft.selections.assaultMutual?.replace(/\s/g, '')
     const mutualOptions: Record<string, [number, number]> = {
-      저도때렸습니다: [38, 21.8], 벗어나기위해힘을행사했습니다: [38, 23.7], 전혀때리지않았습니다: [38, 26.2], 모름: [38, 28.5],
+      저도때렸습니다: [37.1, 22.5], 벗어나기위해힘을행사했습니다: [37.1, 24.5], 전혀때리지않았습니다: [37.1, 26.5], 모름: [37.1, 28.5],
     }
     const mutualMatch = Object.entries(mutualOptions).find(([label]) => mutual?.includes(label))
     if (mutualMatch) addMark(secondMarks, ...mutualMatch[1])
@@ -281,20 +284,20 @@ function OfficialComplaint({
   if (type === 'defamation') {
     const channel = draft.selections.defamationChannel
     const channelMarks: Record<string, [number, number]> = {
-      직접들음: [39, 64.2], 인터넷: [39, 66.5], 메신저: [39, 69], 게임채팅: [39, 71.3], 출판물: [39, 73.6], 기타: [39, 76],
+      직접들음: [39, 63.4], 인터넷: [39, 65.7], 메신저: [39, 68.2], 게임채팅: [39, 70.5], 출판물: [39, 72.8], 기타: [39, 75.2],
     }
     const channelMark = Object.entries(channelMarks).find(([label]) => channel?.replace(/\s/g, '').includes(label))
     if (channelMark) addMark(firstMarks, ...channelMark[1])
     const knownHow = draft.selections.defamationKnownHow
-    const howMarks: Record<string, [number, number]> = { 직접들음: [39, 78.8], 직접목격: [53, 78.8], 지인이알려줌: [39, 81.2], 기타: [53, 81.2] }
+    const howMarks: Record<string, [number, number]> = { 직접들음: [39, 76.7], 직접목격: [53, 76.7], 지인이알려줌: [39, 79], 기타: [53, 79] }
     const howMark = Object.entries(howMarks).find(([label]) => knownHow?.replace(/\s/g, '').includes(label))
     if (howMark) addMark(firstMarks, ...howMark[1])
     const publicity = draft.selections.defamationPublicity
-    if (publicity?.includes('여러 명')) addMark(secondMarks, 38, 1.3)
-    if (publicity?.includes('고소인만')) addMark(secondMarks, 38, 3.5)
+    if (publicity?.includes('여러 명')) addMark(secondMarks, 38, 9)
+    if (publicity?.includes('고소인만')) addMark(secondMarks, 38, 11)
     const civil = draft.selections.civilCase
-    if (civil === '진행 중') addMark(secondMarks, 38, 9.7)
-    if (civil === '진행하지 않음') addMark(secondMarks, 38, 12)
+    if (civil === '진행 중') addMark(secondMarks, 38, 17.7)
+    if (civil === '진행하지 않음') addMark(secondMarks, 38, 19.8)
   }
   if (type === 'fraud') {
     const civil = draft.selections.civilCase
@@ -310,27 +313,27 @@ function OfficialComplaint({
     if (/자료없음|없음/.test(evidenceText)) addMark(secondMarks, 73, 33.4)
   }
   if (type === 'defamation') {
-    if (/영상|사진/.test(evidenceText)) addMark(secondMarks, 38, 15.2)
-    if (/목격자|진술서/.test(evidenceText)) addMark(secondMarks, 57, 15.2)
-    if (/자료없음|없음/.test(evidenceText)) addMark(secondMarks, 76, 15.2)
+    if (/영상|사진/.test(evidenceText)) addMark(secondMarks, 38, 22)
+    if (/목격자|진술서/.test(evidenceText)) addMark(secondMarks, 57, 22)
+    if (/자료없음|없음/.test(evidenceText)) addMark(secondMarks, 76, 22)
   }
   if (type === 'assault') {
-    if (/진단서|병원/.test(evidenceText)) addMark(secondMarks, 38, 36.7)
-    if (/상처사진|사진/.test(evidenceText)) addMark(secondMarks, 49, 36.7)
-    if (/문자|통화/.test(evidenceText)) addMark(secondMarks, 65, 36.7)
-    if (/영상|폭행영상/.test(evidenceText)) addMark(secondMarks, 38, 39.2)
-    if (/목격자|진술서/.test(evidenceText)) addMark(secondMarks, 56, 39.2)
-    if (/자료없음|없음/.test(evidenceText)) addMark(secondMarks, 75, 39.2)
+    if (/진단서|병원/.test(evidenceText)) addMark(secondMarks, 38.1, 35.3)
+    if (/상처사진|사진/.test(evidenceText)) addMark(secondMarks, 48.9, 35.3)
+    if (/문자|통화/.test(evidenceText)) addMark(secondMarks, 62.5, 35.3)
+    if (/영상|폭행영상/.test(evidenceText)) addMark(secondMarks, 38.1, 37.3)
+    if (/목격자|진술서/.test(evidenceText)) addMark(secondMarks, 55.9, 37.3)
+    if (/자료없음|없음/.test(evidenceText)) addMark(secondMarks, 72.5, 37.3)
   }
   const wantsPunishment = /처벌.{0,12}(원|희망)/.test(draft.request) && !draft.request.includes('원하지')
   const doesNotWantPunishment = draft.request.includes('원하지')
-  if (type === 'fraud' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 42, wantsPunishment ? 22 : 24.2)
-  if (type === 'defamation' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 38, wantsPunishment ? 5.8 : 7.8)
-  if (type === 'assault' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 38, wantsPunishment ? 31.8 : 34)
+  if (type === 'fraud' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 37, wantsPunishment ? 20.6 : 22.8)
+  if (type === 'defamation' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 38, wantsPunishment ? 13.1 : 15.5)
+  if (type === 'assault' && (wantsPunishment || doesNotWantPunishment)) addMark(secondMarks, 37.1, wantsPunishment ? 30.9 : 32.9)
   const checklistRows: Record<Exclude<ComplaintType, 'general'>, Record<string, number>> = {
-    fraud: { fraudFamily: 49.5, fraudLivedTogether: 52, fraudKnewLong: 54.5, fraudContactable: 57, fraudPreviousTrade: 59.5, fraudPromise: 63.5, previousComplaint: 68, withdrawnComplaint: 72 },
+    fraud: { fraudFamily: 48.1, fraudLivedTogether: 50.6, fraudKnewLong: 53, fraudContactable: 55.5, fraudPreviousTrade: 58.8, fraudPromise: 63.1, previousComplaint: 67.4, withdrawnComplaint: 71.6 },
     defamation: { defamationFamily: 37.3, defamationKnown: 39.6, defamationIdentifiable: 42.8, defamationReputation: 46.8, defamationPublicPlace: 49.8, defamationOthersKnew: 52.8, defamationOneToOne: 57.7, previousComplaint: 66.6 },
-    assault: { assaultSudden: 56, assaultArgument: 59.5, assaultWitness: 63, assaultCctv: 66, assaultWithdraw: 71, previousComplaint: 77, withdrawnComplaint: 82 },
+    assault: { assaultSudden: 52.9, assaultArgument: 55.6, assaultWitness: 58.3, assaultCctv: 60.9, assaultWithdraw: 64.4, previousComplaint: 68.7, withdrawnComplaint: 72.9 },
   }
   const answerColumns: Record<Exclude<ComplaintType, 'general'>, Record<string, number>> = {
     fraud: { 예: 71.5, 아니오: 79, 모름: 86.5 },
@@ -344,7 +347,7 @@ function OfficialComplaint({
   }
   if (type === 'defamation') {
     const truth = draft.selections.defamationTruth
-    const truthMark: Record<string, [number, number]> = { 사실: [38, 92], '사실 아님': [54, 92], 모름: [78, 92] }
+    const truthMark: Record<string, [number, number]> = { 사실: [38, 89], '사실 아님': [54, 89], 모름: [75, 89] }
     const selectedTruth = Object.entries(truthMark).find(([label]) => truth?.replace(/\s/g, '') === label.replace(/\s/g, ''))
     if (selectedTruth) addMark(firstMarks, ...selectedTruth[1])
   }
@@ -357,7 +360,7 @@ function OfficialComplaint({
       <h1>별지 · 사건 경위 및 추가 내용</h1>
       <p className="document-note">원본 양식에 들어가지 않거나 칸을 넘는 내용은 빠짐없이 별지에 정리했습니다. 제출 전 사실과 표현을 확인해주세요.</p>
       <div className="document-table">
-        {attachmentRows.filter(({ value }) => value).map(({ key, label, value, animateKey }) => <Row key={key} label={label} value={value} animateKey={animateKey} tall={['complainantAddress', 'accusedAddress', 'incidentSummary', 'evidence', 'reason', 'request', 'relatedCase'].includes(key)} onClick={() => onFieldClick(key)} />)}
+        {attachmentRows.filter(({ value }) => value).map(({ key, label, value, animateKey }) => <Row key={key} label={label} value={value} animateKey={animateKey} tall={['complainantAddress', 'accusedAddress', 'incidentSummary', 'evidence', 'reason', 'request'].includes(key)} onClick={() => onFieldClick(key)} />)}
       </div>
       <div className="document-signature"><span>고소인: <Value value={draft.complainantName} animateKey={animatedFields?.complainantName} /> (인)</span></div>
     </article>}

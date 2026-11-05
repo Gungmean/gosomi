@@ -617,5 +617,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .official-checkmark { font-size: 13pt; }
   .official-value { padding: 0 1px; border-radius: 0; background: #ffffffed; }
   .official-attachment { width: 210mm; height: auto; min-height: 297mm; aspect-ratio: auto; padding: 18mm; box-shadow: none; break-after: auto; page-break-after: auto; break-inside: auto; page-break-inside: auto; }
+  .official-attachment { padding-top: 7mm; padding-bottom: 7mm; }
+  .official-attachment .document-signature { margin-top: 4px; break-inside: avoid; page-break-inside: avoid; }
   .official-attachment h1 { font-size: 16pt; }
 }
