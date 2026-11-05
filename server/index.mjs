@@ -273,8 +273,24 @@ function parseAiOutput(output, caseMode = 'complainant') {
     const value = inputResponsePatch[field]
     if (typeof value === 'string' && value.trim()) responsePatch[field] = value.slice(0, 5000)
   }
+  let message = typeof parsed?.message === 'string' ? parsed.message.trim() : ''
+  // Some providers return the requested object as text inside `message` (or
+  // omit JSON key quotes). Never show draftPatch/responsePatch metadata in chat.
+  if (/^\s*\{?\s*["']?message["']?\s*:/i.test(message) && /\b(?:draftPatch|responsePatch|searchQuery|questions)\s*:/i.test(message)) {
+    const match = message.match(/^\s*\{?\s*["']?message["']?\s*:\s*([\s\S]*?)(?=,\s*["']?(?:draftPatch|responsePatch|searchQuery|questions)["']?\s*:)/i)
+    if (match?.[1]) {
+      message = match[1].trim().replace(/^["']|["']$/g, '').trim()
+    } else {
+      message = ''
+    }
+  }
+  // Recover a useful user-facing sentence from a loose, unquoted-key envelope.
+  if (!message && /^\s*\{?\s*["']?message["']?\s*:/i.test(source)) {
+    const match = source.match(/^\s*\{?\s*["']?message["']?\s*:\s*([\s\S]*?)(?=,\s*["']?(?:draftPatch|responsePatch|searchQuery|questions)["']?\s*:)/i)
+    if (match?.[1]) message = match[1].trim().replace(/^["']|["']$/g, '').trim()
+  }
   return {
-    message: String(parsed?.message || '내용을 조금 더 자세히 알려주시겠어요?').slice(0, 12000),
+    message: (message || '답변 형식을 읽지 못했습니다. 같은 내용을 한 번 더 보내주세요.').slice(0, 12000),
     draftPatch,
     responsePatch,
     searchQuery: String(parsed?.searchQuery || '').slice(0, 80),
