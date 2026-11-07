@@ -3,6 +3,7 @@ import { applyConversationSelections } from '../server/conversationSelections.mj
 import { normalizeSupplementalData } from '../shared/draftData.mjs'
 import { blankDraft, blankResponseDraft, defaultModels } from './types'
 import { enrichAccusedAccount, extractAccusedIdentity } from '../server/explicitFacts.mjs'
+import { cleanAssistantMetadata, extractAssistantQuestions } from '../shared/assistantOutput.mjs'
 
 const STORAGE_KEY = 'gosomi.conversations.v1'
 const SETTINGS_KEY = 'gosomi.settings.v1'
@@ -70,6 +71,15 @@ export function loadConversations(): Conversation[] {
       }
       return {
         ...item,
+        messages: item.messages.map((message) => {
+          if (message?.role !== 'assistant' || typeof message.text !== 'string') return message
+          const recoveredQuestions = extractAssistantQuestions(message.text)
+          return {
+            ...message,
+            text: cleanAssistantMetadata(message.text) || '말씀해 주신 내용을 초안에 반영했습니다.',
+            followUpQuestions: message.followUpQuestions?.length ? message.followUpQuestions : recoveredQuestions,
+          }
+        }),
         draft,
         identityBackfillVersion: 1,
         caseMode: item.caseMode === 'respondent' ? 'respondent' : 'complainant',

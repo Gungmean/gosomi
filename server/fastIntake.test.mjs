@@ -36,3 +36,32 @@ test('채팅 API는 대화로 새 체크리스트와 세부 빈칸을 채우고 
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
   }
 })
+
+test('질문이 일반 텍스트 메타데이터로 반환되어도 채팅 API가 추가 질문 데이터를 반환한다', async (t) => {
+  const realFetch = globalThis.fetch
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    if (String(url).startsWith('https://api.openai.com/')) {
+      return Response.json({ choices: [{ message: { content: 'searchQuery: 폭행 피해 고소\nquestions: [{ "id": "incidentDate", "text": "사건이 발생한 날짜를 알려주세요.", "answerType": "text" }]' } }] })
+    }
+    return realFetch(url, options)
+  })
+  const server = app.listen(0, '127.0.0.1')
+  await new Promise((resolve) => server.once('listening', resolve))
+  try {
+    const response = await realFetch(`http://127.0.0.1:${server.address().port}/api/chat`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({
+        settings: { provider: 'openai', model: 'gpt-4.1-mini', apiKey: 'sk-test-key-not-real' },
+        messages: [{ role: 'user', text: '폭행 피해로 고소하고 싶습니다.' }],
+      }),
+    })
+    const result = await response.json()
+    assert.equal(response.status, 200)
+    assert.ok(!result.message.includes('searchQuery:'))
+    assert.ok(!result.message.includes('questions:'))
+    assert.equal(result.followUpQuestions[0].id, 'incidentDate')
+    assert.equal(result.followUpQuestions[0].answerType, 'text')
+    assert.match(result.followUpQuestions[0].text, /날짜/)
+  } finally {
+    await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()))
+  }
+})

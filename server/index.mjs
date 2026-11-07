@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, applySubmittedIntakeAnswers, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
 import { typeQuestions, checklistQuestions, evidenceQuestions, punishmentQuestion } from '../shared/formQuestions.mjs'
 import { publicDetailFields } from '../shared/draftData.mjs'
+import { cleanAssistantMetadata, extractAssistantQuestions } from '../shared/assistantOutput.mjs'
 import { applyConversationSelections } from './conversationSelections.mjs'
 import { enrichAccusedAccount, extractAccusedIdentity, extractComplainantIdentity } from './explicitFacts.mjs'
 
@@ -257,7 +258,7 @@ function parseAiOutput(output, caseMode = 'complainant') {
           .trim()
         parsed = { message: salvaged || source }
       } else {
-        parsed = { message: source }
+        parsed = { message: cleanAssistantMetadata(source), questions: extractAssistantQuestions(source) }
       }
     }
   }
@@ -294,7 +295,7 @@ function parseAiOutput(output, caseMode = 'complainant') {
     const value = inputResponsePatch[field]
     if (typeof value === 'string' && value.trim()) responsePatch[field] = value.slice(0, 5000)
   }
-  let message = typeof parsed?.message === 'string' ? parsed.message.trim() : ''
+  let message = typeof parsed?.message === 'string' ? cleanAssistantMetadata(parsed.message) : ''
   // Some providers return the requested object as text inside `message` (or
   // omit JSON key quotes). Never show draftPatch/responsePatch metadata in chat.
   if (/^\s*\{?\s*["']?message["']?\s*:/i.test(message) && /\b(?:draftPatch|responsePatch|searchQuery|questions)\s*:/i.test(message)) {
@@ -315,7 +316,7 @@ function parseAiOutput(output, caseMode = 'complainant') {
     draftPatch,
     responsePatch,
     searchQuery: String(parsed?.searchQuery || '').slice(0, 80),
-    followUpQuestions: (Array.isArray(parsed?.questions) ? parsed.questions : []).slice(0, caseMode === 'complainant' ? 1 : 4).flatMap((question, index) => {
+    followUpQuestions: (Array.isArray(parsed?.questions) ? parsed.questions : extractAssistantQuestions(source)).slice(0, caseMode === 'complainant' ? 1 : 4).flatMap((question, index) => {
       const text = String(question?.text || '').trim().slice(0, 240)
       if (!text) return []
       const answerType = question?.answerType === 'text' ? 'text' : 'yes_no'
