@@ -640,7 +640,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 
 /* QR hand-off: the document stays local and is rendered on the receiving device. */
 .qr-dialog-overlay { position: fixed; inset: 0; z-index: 100; background: rgb(16 28 19 / 42%); backdrop-filter: blur(3px); }
-.qr-dialog { position: fixed; z-index: 101; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100vw - 32px)); max-height: min(90dvh, 760px); overflow: auto; border: 1px solid #e3e9e2; border-radius: 22px; background: #fff; color: #18221a; box-shadow: 0 28px 90px rgb(16 34 20 / 25%); outline: none; }
+.qr-dialog { position: fixed; z-index: 101; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(560px, calc(100vw - 32px)); max-height: min(90dvh, 900px); overflow: auto; border: 1px solid #e3e9e2; border-radius: 22px; background: #fff; color: #18221a; box-shadow: 0 28px 90px rgb(16 34 20 / 25%); outline: none; }
 .qr-dialog-head { position: relative; padding: 26px 28px 17px; }
 .qr-dialog-icon, .share-download-mark { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 15px; background: #edf4ee; color: #28632e; }
 .qr-dialog-close { position: absolute; top: 21px; right: 21px; display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #718073; cursor: pointer; }
@@ -648,8 +648,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .qr-dialog-head h2 { margin: 19px 0 6px; font-size: 21px; letter-spacing: -.035em; }
 .qr-dialog-head p { margin: 0; color: #728074; font-size: 13px; line-height: 1.65; }
 .qr-dialog-body { display: flex; flex-direction: column; align-items: center; padding: 7px 28px 26px; }
-.qr-image-frame { display: grid; width: 250px; height: 250px; place-items: center; border: 1px solid #e7ece7; border-radius: 20px; background: #fff; }
-.qr-image-frame img { display: block; width: 226px; height: 226px; image-rendering: pixelated; }
+.qr-image-frame { display: grid; width: min(456px, calc(100vw - 74px)); aspect-ratio: 1; place-items: center; border: 1px solid #e7ece7; border-radius: 20px; background: #fff; }
+.qr-image-frame img { display: block; width: min(440px, calc(100vw - 92px)); height: auto; image-rendering: pixelated; }
 .qr-image-loading { padding: 24px; color: #738075; font-size: 13px; text-align: center; }
 .qr-dialog-copy { display: grid; gap: 5px; width: 100%; margin: 17px 0; text-align: center; }
 .qr-dialog-copy strong { font-size: 14px; }
@@ -690,8 +690,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .qr-dialog { border-radius: 18px; }
   .qr-dialog-head { padding: 22px 21px 14px; }
   .qr-dialog-body { padding: 7px 21px 22px; }
-  .qr-image-frame { width: 228px; height: 228px; }
-  .qr-image-frame img { width: 206px; height: 206px; }
+  .qr-image-frame { width: min(456px, calc(100vw - 74px)); }
+  .qr-image-frame img { width: min(440px, calc(100vw - 92px)); }
   .share-download-page { padding: 18px 12px 36px; }
   .share-download-card { padding: 22px 18px; border-radius: 16px; }
   .share-document-stage { padding: 10px; }

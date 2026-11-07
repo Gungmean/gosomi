@@ -24,8 +24,8 @@ export default function QrDownloadDialog({ open, draft, onClose }: { open: boole
         const image = await QRCode.toDataURL(url, {
           errorCorrectionLevel: 'L',
           margin: 2,
-          width: 280,
-          color: { dark: '#123c1d', light: '#ffffff' },
+          width: Math.max(220, Math.min(440, window.innerWidth - 92)),
+          color: { dark: '#000000', light: '#ffffff' },
         })
         if (!cancelled) {
           setShareUrl(url)

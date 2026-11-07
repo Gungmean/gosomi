@@ -2,6 +2,7 @@ import type { ComplaintDraft } from './types'
 import { normalizeSupplementalData } from '../shared/draftData.mjs'
 
 const sharePrefix = 'gosomi-share='
+const publicAppOrigin = 'https://gosomi-orpin.vercel.app'
 const allowedTypes = new Set(['fraud', 'defamation', 'assault', 'general'])
 
 function toBase64Url(bytes: Uint8Array) {
@@ -25,7 +26,8 @@ export async function createShareUrl(draft: ComplaintDraft) {
   const shareDraft = draft
   const stream = new Blob([JSON.stringify(shareDraft)]).stream().pipeThrough(new CompressionStream('gzip'))
   const compressed = new Uint8Array(await new Response(stream).arrayBuffer())
-  const url = new URL(window.location.href)
+  const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
+  const url = new URL(isLocalHost ? `${publicAppOrigin}${window.location.pathname}${window.location.search}` : window.location.href)
   url.hash = `${sharePrefix}${toBase64Url(compressed)}`
   return url.toString()
 }
