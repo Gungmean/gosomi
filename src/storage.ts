@@ -1,4 +1,6 @@
 import type { AiSettings, Conversation } from './types'
+import { applyConversationSelections } from '../server/conversationSelections.mjs'
+import { normalizeSupplementalData } from '../shared/draftData.mjs'
 import { blankDraft, blankResponseDraft, defaultModels } from './types'
 import { enrichAccusedAccount, extractAccusedIdentity } from '../server/explicitFacts.mjs'
 
@@ -50,7 +52,7 @@ export function loadConversations(): Conversation[] {
     return parsed.filter((item): item is Conversation =>
       Boolean(item && typeof item === 'object' && 'id' in item && 'messages' in item),
     ).map((item) => {
-      const draft = { ...blankDraft(), ...item.draft, selections: { ...(item.draft?.selections || {}) } }
+      const draft = { ...blankDraft(), ...item.draft, ...normalizeSupplementalData(item.draft), selections: { ...(item.draft?.selections || {}) } }
       if (item.identityBackfillVersion !== 1 && item.caseMode !== 'respondent' && Array.isArray(item.messages)) {
         const facts = [...item.messages].reverse()
           .filter((message) => message?.role === 'user' && typeof message.text === 'string')
@@ -60,6 +62,11 @@ export function loadConversations(): Conversation[] {
         }
         const explicitAccount = facts.find((entry) => entry.accusedAccount)?.accusedAccount
         if (explicitAccount) draft.accusedAccount = enrichAccusedAccount(draft.accusedAccount, explicitAccount)
+      }
+      if (item.caseMode !== 'respondent') {
+        const inferred = applyConversationSelections({}, { ...draft, manualSelections: [...(draft.manualSelections || []), ...Object.keys(draft.selections).filter((key) => draft.selections[key])] }, item.messages)
+        draft.selections = { ...draft.selections, ...inferred.selections }
+        draft.selectionEvidence = { ...draft.selectionEvidence, ...inferred.selectionEvidence }
       }
       return {
         ...item,

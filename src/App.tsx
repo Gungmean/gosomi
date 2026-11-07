@@ -433,7 +433,7 @@ function App() {
       updateConversation(target.id, (conversation) => ({
         ...conversation,
         messages: [...conversation.messages, assistantMessage],
-        draft: { ...conversation.draft, ...result.draftPatch, selections: { ...conversation.draft.selections, ...result.draftPatch.selections } },
+        draft: { ...conversation.draft, ...result.draftPatch, selections: { ...conversation.draft.selections, ...result.draftPatch.selections }, documentDetails: { ...conversation.draft.documentDetails, ...result.draftPatch.documentDetails }, selectionEvidence: { ...conversation.draft.selectionEvidence, ...result.draftPatch.selectionEvidence } },
         responseDraft: { ...blankResponseDraft(), ...conversation.responseDraft, ...result.responsePatch },
         receivedDocuments: (conversation.receivedDocuments || []).map((item) => pendingDocuments.some((pending) => pending.id === item.id) ? { ...item, analyzed: true } : item),
         updatedAt: Date.now(),

@@ -16,6 +16,21 @@ export interface ResponseDraft {
 export const blankResponseDraft = (): ResponseDraft => ({ receivedDocument: '', agency: '', receivedAt: '', appearanceDate: '', allegation: '', claims: '', confirmedFacts: '', disputedPoints: '', evidenceToPreserve: '', questionsToConfirm: '', nextSteps: '' })
 export type Provider = 'openai' | 'anthropic' | 'gemini'
 
+export interface AdditionalParty {
+  name: string
+  residentId: string
+  address: string
+  phone: string
+  other: string
+}
+export interface AdditionalIncident {
+  date: string
+  place: string
+  damage: string
+  summary: string
+  account: string
+}
+
 export interface ComplaintDraft {
   type: ComplaintType
   complainantName: string
@@ -37,6 +52,11 @@ export interface ComplaintDraft {
   request: string
   relatedCase: string
   documentDetails: Record<string, string>
+  additionalComplainants: AdditionalParty[]
+  additionalAccused: AdditionalParty[]
+  additionalIncidents: AdditionalIncident[]
+  manualSelections: string[]
+  selectionEvidence: Record<string, string>
   selections: Record<string, string>
 }
 
@@ -168,6 +188,11 @@ export const blankDraft = (): ComplaintDraft => ({
   request: '',
   relatedCase: '',
   documentDetails: {},
+  additionalComplainants: [],
+  additionalAccused: [],
+  additionalIncidents: [],
+  manualSelections: [],
+  selectionEvidence: {},
   selections: {},
 })
 

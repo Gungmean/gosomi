@@ -696,3 +696,28 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .share-download-card { padding: 22px 18px; border-radius: 16px; }
   .share-document-stage { padding: 10px; }
 }
+
+/* Original form fields use page-relative units for preview, print and QR PDF. */
+.official-value { padding: 0 1px; background: #fff; line-height: 1.25; }
+.official-value.is-empty { background: transparent; }
+.official-checkmark { padding: 0; border: 0; background: transparent; font-size: 2cqw; line-height: 1; pointer-events: auto; cursor: pointer; }
+.official-checkmark:hover { outline: 1px solid var(--green); }
+.form-multi-options { display: grid; gap: 10px; margin-top: 12px; }
+.form-multi-option { display: flex; align-items: center; gap: 8px; color: #435247; font-size: 13px; cursor: pointer; }
+.form-multi-option input { accent-color: var(--green); width: 16px; height: 16px; }
+.form-auto-evidence { margin: 7px 0 10px; color: #44694c; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.supplemental-editor { margin-top: 24px; }
+.supplemental-editor h4 { margin: 0 0 14px; color: #344c3b; font-size: 13px; }
+.supplemental-entry { min-width: 0; margin: 0 0 20px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; }
+.supplemental-entry legend { padding: 0 5px; font-size: 12px; color: #435247; font-weight: 700; }
+.supplemental-add, .supplemental-remove { display: inline-flex; align-items: center; gap: 6px; padding: 9px 12px; border: 1px solid #ccdbcf; border-radius: 7px; background: #fff; font-size: 12px; color: #1b642d; }
+.supplemental-remove { color: #8c3931; border-color: #e5d4d1; }
+.supplemental-add:hover { background: #eff6f0; }
+.supplemental-remove:hover { background: #fcf3f1; }
+.supplemental-full-entry { margin: 18px 0; }
+.supplemental-full-entry h2 { margin: 0 0 10px; font-size: 13px; }
+.supplemental-full-entry p { display: grid; grid-template-columns: 25% 1fr; gap: 10px; margin: 8px 0; }
+.supplemental-full-entry span { white-space: pre-wrap; overflow-wrap: anywhere; }
+@media print { .official-value.is-empty { visibility: hidden; } .official-checkmark { font-size: 2cqw; } }
+
+.document-print-root { container-type: inline-size; }

@@ -3,11 +3,11 @@ import assert from 'node:assert/strict'
 import { nextComplaintIntakeQuestion, applyCurrentIntakeAnswer, alignMessageWithIntakeQuestion, isSimpleIntakeSubmission, complaintIntakeSteps } from './complaintIntake.mjs'
 const identity = ['complainantName','complainantAddress','complainantPhone','accusedName','accusedAddress','accusedPhone','accusedOnlineId','accusedAccount']
 const filled = () => ({ type:'fraud', ...Object.fromEntries([...identity,...complaintIntakeSteps.map(x=>x.field)].map(k=>[k,'확인됨'])), selections:{} })
-test('기본 사건 내용이 채워져도 유형별 질문은 계속된다',()=>{
- assert.equal(nextComplaintIntakeQuestion(filled(),[{role:'user',text:'네'}])[0].id,'fraudMethod')
+test('기본 사건 내용이 채워지면 체크리스트 질문을 추가하지 않는다',()=>{
+ assert.equal(nextComplaintIntakeQuestion(filled(),[{role:'user',text:'네'}]),null)
 })
-test('기존 초안에서 짧은 메시지에도 빈 인적사항을 질문한다',()=>{
- assert.equal(nextComplaintIntakeQuestion({type:'fraud',incidentSummary:'송금 후 미배송'},[{role:'user',text:'다음'}])[0].id,'complainantName')
+test('기존 초안에서는 인적사항 대신 빠진 핵심 사건 내용만 질문한다',()=>{
+ assert.equal(nextComplaintIntakeQuestion({type:'fraud',incidentSummary:'송금 후 미배송'},[{role:'user',text:'다음'}])[0].id,'incidentDate')
 })
 test('예 아니오 답변은 selections에 저장하고 기존 선택을 보존한다',()=>{
  const patch=applyCurrentIntakeAnswer({}, {selections:{fraudMethod:'일반 매매'}}, {questionId:'fraudFamily',choice:'no'})
@@ -16,7 +16,7 @@ test('예 아니오 답변은 selections에 저장하고 기존 선택을 보존
 test('건너뛴 빈칸을 다시 묻지 않는다',()=>{
  const draft=filled(); delete draft.complainantName
  const messages=[{role:'assistant',followUpSubmitted:true,followUpQuestions:[{id:'complainantName'}],followUpAnswers:{complainantName:{text:'모름 / 건너뛰기'}}}]
- assert.equal(nextComplaintIntakeQuestion(draft,messages)[0].id,'fraudMethod')
+ assert.equal(nextComplaintIntakeQuestion(draft,messages),null)
  assert.equal(applyCurrentIntakeAnswer({}, {}, {questionId:'complainantName',text:'모름 / 건너뛰기'}).complainantName,undefined)
 })
 test('질문 카드와 충돌하는 마지막 질문 안내를 답변에서 제거한다',()=>{

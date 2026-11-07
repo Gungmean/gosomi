@@ -1,5 +1,7 @@
 import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, DocumentInput, FollowUpQuestion, Precedent, ResponseDraft } from './types'
 
+import { publicDetailFields } from '../shared/draftData.mjs'
+
 async function readJson(response: Response) {
   const body = await response.json().catch(() => ({}))
   if (!response.ok) {
@@ -24,7 +26,7 @@ export async function askAi(
     response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settings, messages, draft: { ...draft, documentDetails: undefined }, precedents, caseMode, responseDraft, documentInput, intakeSubmission, demo }),
+      body: JSON.stringify({ settings, messages, draft: { ...draft, documentDetails: Object.fromEntries(publicDetailFields.filter((key) => draft.documentDetails?.[key]).map((key) => [key, draft.documentDetails[key]])), additionalComplainants: undefined, additionalAccused: undefined }, precedents, caseMode, responseDraft, documentInput, intakeSubmission, demo }),
       signal: AbortSignal.timeout(55000),
     })
   } catch (error) {

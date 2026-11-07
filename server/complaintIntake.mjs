@@ -14,9 +14,6 @@ export const complaintIntakeSteps = [
 
 const coreIntakeFields = new Set(['incidentDate', 'incidentPlace', 'incidentSummary', 'damage', 'evidence'])
 const coreIntakeSteps = complaintIntakeSteps.filter((step) => coreIntakeFields.has(step.field))
-const checklistStepsByType = Object.fromEntries(Object.entries(checklistQuestions).map(([type, questions]) => [type,
-  questions.map((question) => ({ field: question.id, text: question.label, selection: true, answerType: 'yes_no' })),
-]))
 
 const identitySteps = [
   ['complainantName', '고소인의 성명을 알려주세요. 직접 입력하거나 건너뛰어도 됩니다.'],
@@ -96,6 +93,7 @@ export function applySubmittedIntakeAnswers(draftPatch, draft, messages) {
       const answer = message.followUpAnswers?.[question.id] || {}
       const value = valueForAnswer(question.id, answer)
       if (stepsByField.get(question.id).selection) {
+        if (draft?.manualSelections?.includes(question.id)) continue
         nextPatch.selections = { ...draft?.selections, ...nextPatch.selections, [question.id]: answerChoiceValue(answer, value) }
       } else if (value) {
         nextPatch[question.id] = value
@@ -131,14 +129,11 @@ export function nextComplaintIntakeQuestion(draft, messages) {
   const hasSubmittedIntake = conversation.some((message) => message?.role === 'assistant' && message.followUpSubmitted && (message.followUpQuestions || []).some((question) => stepsByField.has(question?.id)))
   const hasDraft = [...coreIntakeFields].some((field) => String(draft?.[field] || '').trim())
   if (!describesCase && !hasSubmittedIntake && !hasDraft) return null
-  // Ask core incident facts one at a time, then present the legal checklist in
-  // one batch card so visitors can answer all its choices together.
+  // Ask core incident facts one at a time. Checklist completion remains passive.
   const next = coreIntakeSteps.find((step) => !String(draft?.[step.field] || '').trim() && !submitted.answeredFields.has(step.field))
   if (next) return [{ id: next.field, text: next.text, answerType: 'text', placeholder: '답변을 입력하거나 아래 버튼으로 건너뛸 수 있어요' }]
 
-  const checklist = checklistStepsByType[draft?.type] || []
-  const pendingChecklist = checklist.filter((step) => !submitted.answeredFields.has(step.field))
-  if (pendingChecklist.length) return pendingChecklist.map((step) => ({ id: step.field, text: step.text, answerType: 'yes_no' }))
+  // Checklist answers are extracted from the conversation, never asked as a questionnaire.
   return null
 }
 

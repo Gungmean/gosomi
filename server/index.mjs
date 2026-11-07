@@ -3,6 +3,9 @@ import express from 'express'
 import { resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { alignMessageWithIntakeQuestion, applyCurrentIntakeAnswer, applySubmittedIntakeAnswers, complaintIntakeCompletionMessage, complaintIntakeProgressMessage, nextComplaintIntakeQuestion } from './complaintIntake.mjs'
+import { typeQuestions, checklistQuestions, evidenceQuestions, punishmentQuestion } from '../shared/formQuestions.mjs'
+import { publicDetailFields } from '../shared/draftData.mjs'
+import { applyConversationSelections } from './conversationSelections.mjs'
 import { enrichAccusedAccount, extractAccusedIdentity, extractComplainantIdentity } from './explicitFacts.mjs'
 
 const app = express()
@@ -159,6 +162,7 @@ const draftFields = [
 const draftSelectionFields = new Set([
   'fraudMethod', 'civilCase', 'fraudFamily', 'fraudLivedTogether', 'fraudKnewLong', 'fraudContactable', 'fraudPreviousTrade', 'fraudPromise', 'previousComplaint', 'withdrawnComplaint',
   'defamationChannel', 'defamationKnownHow', 'defamationTruth', 'defamationPublicity', 'defamationFamily', 'defamationKnown', 'defamationIdentifiable', 'defamationReputation', 'defamationPublicPlace', 'defamationOthersKnew', 'defamationOneToOne',
+  'defamationWithdraw', 'defamationQuote', 'punishment', 'evidenceTypes', 'damageKnown',
   'assaultBodyPart', 'assaultType', 'assaultRelation', 'assaultCondition', 'assaultMethod', 'assaultHospital', 'assaultMutual', 'assaultSudden', 'assaultArgument', 'assaultWitness', 'assaultCctv', 'assaultWithdraw',
 ])
 
@@ -170,10 +174,12 @@ function systemPrompt(draft, precedents, caseMode = 'complainant', responseDraft
   const hasPriorAssistantReply = hasCollectedDraftFacts || (Array.isArray(messages) && messages.some((message) => message?.role === 'assistant' && Array.isArray(message.followUpQuestions) && message.followUpQuestions.length > 0))
   const compactDraft = Object.fromEntries(Object.entries(draft || {}).flatMap(([key, value]) => {
     if (typeof value === 'string' && value.trim()) return [[key, value.slice(0, 1200)]]
-    if (key === 'selections' && value && typeof value === 'object') {
-      const selections = Object.fromEntries(Object.entries(value).filter(([, item]) => typeof item === 'string' && item.trim()).map(([name, item]) => [name, item.slice(0, 120)]))
+    if ((key === 'selections' || key === 'documentDetails') && value && typeof value === 'object') {
+      const selections = Object.fromEntries(Object.entries(value).filter(([name, item]) => (key !== 'documentDetails' || publicDetailFields.includes(name)) && typeof item === 'string' && item.trim()).map(([name, item]) => [name, item.slice(0, 120)]))
       if (Object.keys(selections).length) return [[key, selections]]
     }
+    if (key === 'manualSelections' && Array.isArray(value)) return [[key, value]]
+    if (key === 'additionalIncidents' && Array.isArray(value)) return [[key, value]]
     return []
   }))
   const verifiedCases = Array.isArray(precedents) ? precedents.slice(0, 4).map((item) => ({
@@ -200,17 +206,17 @@ ${hasPriorAssistantReply
 사용자가 대화나 첨부자료에서 이미 제공한 인적사항·사건정보를 빠뜨리지 말고 draftPatch에 반영하세요. 초안 필드에 값이 있는데도 그 값을 미리보기에서 다시 입력하라고 안내하지 마세요. 미리보기 직접 입력 안내는 대화에 나오지 않은 필수 정보가 있을 때 그 누락 항목에 한해서만 하세요. 인적사항을 새로 묻지는 말되, 사용자가 명시적으로 제공한 정보는 초안에 넣으세요.
 draftPatch 필드 매핑: complainantName/complainantBirth/complainantAddress/complainantPhone은 사용자가 본인 정보라고 분명히 밝힌 값만, accusedName/accusedAddress/accusedPhone은 상대방 정보라고 분명히 밝힌 값만 넣으세요. 판매자·상대방의 플랫폼 닉네임이나 아이디는 accusedOnlineId, 상대방 계좌번호와 예금주명은 accusedAccount에 함께 넣으세요. incidentDate·incidentTime·incidentPlace는 확인된 일시·시간·장소, incidentSummary는 시간 순서에 따른 행위와 대화, damage는 금전·신체 피해, reason은 고소에 이르게 된 이유, evidence는 대화 캡처·이체 내역·신분증 사진 등 실제 언급한 자료, request는 처벌 의사나 수사 요청, relatedCase는 이미 진행 중인 사건·수사 정보입니다. 값을 다른 필드에 몰아넣지 말고, 일부만 확인됐으면 그 부분만 작성하세요. 마스킹된 번호는 마스킹 상태 그대로 보존하세요.
 AI가 확인할 사건 내용의 순서는 피해 날짜 → 시간 → 장소 → 사건 경위 → 피해 내용·금액 → 고소 이유 → 증거자료 → 처벌 희망·요청 → 관련 수사·재판입니다.
-추가 질문은 날짜·장소·사건 경위·피해·보유 자료 중 초안에 꼭 필요한 미확인 항목을 모두 확인할 때까지 한 번에 하나씩 하세요. 질문 개수 제한은 두지 않되 이미 답변했거나 건너뛴 항목은 반복하지 말고, 사용자가 그만하기를 원하면 즉시 멈추세요. 이름·주소·전화번호는 채팅으로 묻지 마세요. 사건 유형이 fraud/defamation/assault로 정해지면 해당 고소장 체크리스트는 서버가 별도 카드 하나에 모두 묶어 한꺼번에 제시합니다. 체크리스트 항목을 message나 questions에서 하나씩 물어보지 마세요. 핵심 사건 확인과 체크리스트 답변이 끝나면 더 묻지 말고, 확인된 사실과 초안에 반영한 내용을 간단히 정리하고 사용자가 지금 확인할 구체적인 다음 행동을 안내하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
+추가 질문은 날짜·장소·사건 경위·피해·보유 자료 중 초안에 꼭 필요한 미확인 항목을 모두 확인할 때까지 한 번에 하나씩 하세요. 질문 개수 제한은 두지 않되 이미 답변했거나 건너뛴 항목은 반복하지 말고, 사용자가 그만하기를 원하면 즉시 멈추세요. 이름·주소·전화번호는 채팅으로 묻지 마세요. 체크리스트와 선택 항목은 대화 전체에서 확인되는 내용으로 자동 반영하세요. 체크리스트를 채우기 위한 직접 질문이나 별도 질문 카드를 만들지 마세요. 언급이 없다는 이유로 아니오나 모름을 채우지 마세요. 핵심 사건 확인이 끝나면 더 묻지 말고, 확인된 사실과 초안에 반영한 내용을 간단히 정리하고 사용자가 지금 확인할 구체적인 다음 행동을 안내하세요. '반영했습니다'라는 말만으로 답을 끝내지 마세요.
 사용자가 '모름', '없음', '건너뛰기', '나중에 직접 입력'이라고 하면 해당 항목을 비워 두세요. 같은 항목을 다시 묻지 말고, 초안에서 확인 가능한 사실과 다음 확인 방법을 안내하세요. 이미 메시지나 draft에 답이 있는 항목은 반복 질문하지 마세요.
 ` : ''
   return `당신은 한국어로 대화하는 ${caseMode === 'respondent' ? '고소장 수령 대응' : '고소장 작성'} 및 법률정보 보조 도우미 "고소미"입니다.
 법률가를 자처하거나 결과를 보장하지 마세요. 사용자가 말하지 않은 사실을 만들지 마세요.
-사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 고소장 작성 모드에서는 핵심 사건 질문은 한 번에 하나씩, 사건 체크리스트는 한 카드에 모두 묶어 물으세요. 수령 대응 모드에서는 핵심 질문을 최대 2개까지 하되, 이미 받은 답을 반복하거나 대화를 끝없이 이어가지 마세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
+사용자의 질문에 먼저 직접 답하세요. 사실을 더 물어야 할 때도 질문만 나열하지 말고 현재까지 확인된 내용으로 가능한 안내를 먼저 제공하세요. 고소장 작성 모드에서는 핵심 사건 질문은 한 번에 하나씩, 사건 체크리스트는 대화의 근거로 자동 반영하고 직접 묻지 마세요. 수령 대응 모드에서는 핵심 질문을 최대 2개까지 하되, 이미 받은 답을 반복하거나 대화를 끝없이 이어가지 마세요. 인사나 일반 질문에는 자연스럽게 응답하세요.
 사건 상담에서는 대화와 문서에 이미 나온 사실을 다시 묻지 마세요. 필요에 따라 확인된 사실, 법적으로 살펴볼 쟁점, 지금 할 일과 보관할 증거를 구체적으로 설명하세요. 확인된 사실과 추정, 법률적 해석은 구분하세요.
 답변은 질문에 먼저 직접 답하고, 간단한 질문에는 자연스럽고 짧게 답하세요. 사건 상담에서만 필요한 항목을 골라 핵심 답변, 확인된 사실과 미확인 사항, 관련 쟁점·검증된 근거, 구체적인 다음 행동 순으로 설명하세요. 모든 답변에 항목을 억지로 붙이거나 같은 내용을 반복하지 마세요. 사용자가 문서 작성을 요청하면 요청한 문서 형식으로 답하세요. 법령·판례 원문을 확인하지 못했다면 추측하지 말고 그 한계를 밝혀 주세요. 절차나 법정 기간은 사건 유형, 문서 종류, 송달·통지일에 따라 달라질 수 있으므로 구체적 근거를 확인하기 전에는 숫자나 마감일을 단정하지 마세요.
 법률 판단에는 단정 대신 조건과 불확실성을 밝혀 주세요. 조문이나 판례의 번호·내용을 기억으로 만들어 인용하지 마세요.
 아래 verifiedCases는 공식 판례 검색에서 확인한 결과입니다. 현재 질문과 실제 쟁점이 맞는 판례가 있으면 답변 끝에 **참고 판례** 항목을 두고, 사건번호·선고일·법원과 핵심 법리를 짧게 설명한 뒤 반드시 제공된 URL을 마크다운 링크로 연결하세요. 요약이 비어 있거나 쟁점 관련성이 불분명하면 인용하지 마세요. 검색 결과를 사건의 결론이나 승소 가능성을 뒷받침하는 것처럼 과장하지 말고, 판례의 사실관계가 다르면 그 차이를 밝혀 주세요. 목록에 없는 판례·사건번호·링크를 만들지 마세요.
-${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : `고소장 작성 모드에서는 사용자의 사건 설명과 후속 답변에서 확인된 사실을 매 응답마다 draftPatch의 알맞은 필드에 반영하세요. 채팅 답변(message)에만 사실을 적고 draftPatch를 비워 두지 마세요. 일시·장소·행위·피해·증거·상대 식별정보를 각각 대응하는 필드에 넣고, 사건 유형이 명확하면 type도 fraud/defamation/assault/general 중 선택하세요. 선택형 질문에 답할 근거가 분명한 경우 draftPatch.selections의 해당 키도 채우세요. 사용자가 말하지 않은 정보는 만들지 말고, 불확실한 값은 비워 두고 질문하세요. 기존 값을 임의로 지우지 마세요.`}
+${caseMode === 'respondent' ? '고소장 작성용 draftPatch는 항상 비워 두세요.' : `고소장 작성 모드에서는 사용자의 사건 설명과 후속 답변에서 확인된 사실을 매 응답마다 draftPatch의 알맞은 필드에 반영하세요. 채팅 답변(message)에만 사실을 적고 draftPatch를 비워 두지 마세요. 일시·장소·행위·피해·증거·상대 식별정보를 각각 대응하는 필드에 넣고, 사건 유형이 명확하면 type도 fraud/defamation/assault/general 중 선택하세요. 선택형 항목에 답할 근거가 분명한 경우 draftPatch.selections의 해당 키도 채우세요. 각 체크리스트 답변에는 draftPatch.selectionEvidence의 같은 키에 사용자가 실제 말한 근거 문구를 원문 그대로 넣으세요. 모르는 항목은 비워 두세요. 사용자가 직접 수정한 manualSelections 항목은 바꾸지 마세요. 사용자가 말하지 않은 정보는 만들지 말고, 불확실한 값은 비워 두고 질문하세요. 기존 값을 임의로 지우지 마세요.`}
 판례 검색이 유용하면 searchQuery에 사람 이름, 연락처, 계좌번호 등을 뺀 2~5단어의 법률 쟁점을 넣으세요. 아니면 빈 문자열로 두세요.
 즉각적인 신체 위험이나 폭력이 진행 중이라고 하면 분석보다 안전 확보를 우선하고 112 또는 119에 연락하도록 안내하세요. 구속·체포, 임박한 조사·재판 일정, 접근금지 등 회복하기 어려운 결과가 걸린 상황은 일반 안내와 분리해 변호사 또는 공공 법률상담을 신속히 받도록 분명하게 권하세요. 긴급한 안전 위협이 아니면 과도하게 위기 상황으로 표현하지 마세요.
 ${modeGuidance}
@@ -220,6 +226,9 @@ ${complainantFlow}
 ${caseMode === 'complainant' ? '고소장 작성 모드에서는 questions를 1개까지만 반환하세요.' : '필요한 확인 질문은 최대 4개까지 반환할 수 있습니다.'} 답이 예/아니오로 가능한 질문은 answerType을 yes_no로, 구체적인 설명이 필요한 질문은 text로 지정하세요. 예라고 답한 뒤 추가 설명이 필요한 yes_no 질문에는 detailPrompt를 넣으세요. 질문 문장은 message에 반복하지 말고 questions에만 넣으세요. 확인 질문이 필요 없으면 빈 배열을 반환하세요.
 반드시 JSON 객체 하나로만 답하세요. 최상위 키는 message(문자열), draftPatch(객체), responsePatch(객체), searchQuery(문자열), questions(배열)입니다. questions의 각 항목에는 id, text, answerType을 넣고 필요할 때만 detailPrompt를 넣으세요. message에는 이번 사용자 입력에 실제로 답하는 한국어를 작성하세요. 형식 설명이나 예시 문구를 답변으로 복사하지 마세요.
 허용된 draftPatch 키: ${draftFields.join(', ')}, selections (${[...draftSelectionFields].join(', ')})
+선택 항목 의미와 허용값: ${JSON.stringify({ typeQuestions, evidenceQuestions, punishmentQuestion, checklistQuestions })}
+체크리스트 답변값은 예/아니오/모름입니다. 복수 선택은 원본의 허용값들을 " | "로 구분합니다. evidenceTypes의 자료 없음은 다른 증거와 동시에 선택하지 마세요. 이전 기록의 selections가 있으면 정정 근거 없이 변경하지 마세요. request가 미정이면 처벌 의사를 추측하지 마세요. 명예훼손 defamationQuote는 상대방이 실제 말하거나 기재한 원문만, assaultBodyPart는 언급된 부위만 담으세요.
+추가로 허용된 draftPatch 키: selectionEvidence(체크리스트 키: 사용자 원문 근거), documentDetails (${publicDetailFields.join(', ')}), additionalIncidents (각 항목: date, place, damage, summary, account). documentDetails의 주민등록번호 등 민감정보는 생성하지 마세요. 여러 차례 피해가 확인된 경우에만 additionalIncidents에 각 사건을 중복 없이 정리하세요. 사건 경위와 상대방이 실제 한 말은 구분하세요.
 허용된 responsePatch 키: ${responseFields.join(', ')}
 ${caseMode === 'respondent' ? '' : `현재 고소장 상태: ${JSON.stringify(compactDraft)}`}
 ${caseMode === 'respondent' ? `사용자가 선택한 사건 분류: ${String(draft?.type || 'general')}` : ''}
@@ -265,7 +274,21 @@ function parseAiOutput(output, caseMode = 'complainant') {
   }
   const inputSelections = inputPatch.selections && typeof inputPatch.selections === 'object' && !Array.isArray(inputPatch.selections) ? inputPatch.selections : {}
   const selections = Object.fromEntries(Object.entries(inputSelections).filter(([field, value]) => draftSelectionFields.has(field) && typeof value === 'string' && value.trim()).map(([field, value]) => [field, value.slice(0, 500)]))
+  const allowedOptions = new Map([
+    ...Object.values(typeQuestions).flat().map((item) => [item.id, item.options]),
+    ...Object.values(evidenceQuestions).map((item) => [item.id, [...new Set(Object.values(evidenceQuestions).flatMap((entry) => entry.options))]]),
+    [punishmentQuestion.id, punishmentQuestion.options], ['damageKnown', ['금액 확인', '모름']],
+    ...Object.values(checklistQuestions).flat().map((item) => [item.id, ['예', '아니오', '모름']]),
+  ])
+  for (const [key, value] of Object.entries(selections)) {
+    if (allowedOptions.has(key) && value.split(' | ').some((option) => !allowedOptions.get(key).includes(option))) delete selections[key]
+  }
   if (Object.keys(selections).length) draftPatch.selections = selections
+  const evidence = inputPatch.selectionEvidence
+  if (evidence && typeof evidence === 'object' && !Array.isArray(evidence)) draftPatch.selectionEvidence = Object.fromEntries(Object.entries(evidence).filter(([key, value]) => draftSelectionFields.has(key) && typeof value === 'string').map(([key, value]) => [key, value.slice(0, 1000)]))
+  const detailPatch = inputPatch.documentDetails
+  if (detailPatch && typeof detailPatch === 'object' && !Array.isArray(detailPatch)) draftPatch.documentDetails = Object.fromEntries(Object.entries(detailPatch).filter(([key, value]) => publicDetailFields.includes(key) && typeof value === 'string' && value.trim()).map(([key, value]) => [key, value.slice(0, 10000)]))
+  if (Array.isArray(inputPatch.additionalIncidents) && inputPatch.additionalIncidents.length) draftPatch.additionalIncidents = inputPatch.additionalIncidents.filter((item) => item && typeof item === 'object').slice(0, 100).map((item) => Object.fromEntries(['date', 'place', 'damage', 'summary', 'account'].map((key) => [key, typeof item[key] === 'string' ? item[key].slice(0, 10000) : ''])))
   const inputResponsePatch = parsed?.responsePatch && typeof parsed.responsePatch === 'object' ? parsed.responsePatch : {}
   for (const field of responseFields) {
     const value = inputResponsePatch[field]
@@ -375,6 +398,7 @@ export function supplementExplicitFacts(result, messages, draft, responseDraft, 
       result.draftPatch.incidentSummary = narrative.slice(0, 2000)
     }
   }
+  if (caseMode !== 'respondent') result.draftPatch = applyConversationSelections(result.draftPatch, draft, messages)
   return result
 }
 

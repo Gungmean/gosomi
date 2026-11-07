@@ -1,20 +1,20 @@
 export const typeQuestions = {
   fraud: [
-    { id: 'fraudMethod', label: '사기 수법', options: ['회원모집', '알선빙자', '부동산 거래', '물품대금·납품', '일반 매매', '차용금', '투자금', '사칭·빙자', '기타/모름'] },
+    { id: 'fraudMethod', label: '사기 수법', options: ['회원모집', '알선빙자', '부동산 거래', '불법신용카드 사용', '공사대금·납품', '물품대금·납품', '기타용역대금·납품', '일반 매매', '무전취식·무전숙박·무임승차', '차용금', '선불금', '투자금', '계금', '소송사기', '보조금 사기', '사칭·빙자', '보험사기', '기타/모름'] },
     { id: 'civilCase', label: '관련 민사소송', options: ['진행 중', '진행하지 않음', '모름'] },
   ],
   defamation: [
-    { id: 'defamationChannel', label: '피해 장소·매체', options: ['직접 들음', '인터넷', '메신저', '게임 채팅', '출판물', '기타'] },
+    { id: 'defamationChannel', label: '피해 장소·매체', options: ['직접 들음', '인터넷', '메신저', '게임 채팅', '출판물', '전단지·벽보·현수막', '기타'] },
     { id: 'defamationKnownHow', label: '피해 사실을 알게 된 방법', options: ['직접 들음', '직접 목격', '지인이 알려줌', '기타'] },
     { id: 'defamationTruth', label: '해당 내용의 사실 여부', options: ['사실', '사실 아님', '모름'] },
     { id: 'defamationPublicity', label: '다른 사람에게 공개되었나요?', options: ['여러 명이 보거나 들음', '고소인만 알 수 있었음', '모름'] },
     { id: 'civilCase', label: '관련 민사소송', options: ['진행 중', '진행하지 않음', '모름'] },
   ],
   assault: [
-    { id: 'assaultType', label: '폭행 종류', options: ['가정폭력', '교제폭력', '아동 폭행', '학교폭력', '노인폭행', '의료인 폭행', '운전자 폭행', '일반폭력', '기타'] },
+    { id: 'assaultType', label: '폭행 종류', options: ['가정폭력', '교제폭력', '아동 폭행', '학교폭력', '노인폭행', '의료인 폭행', '항공기 내 폭행', '운전자 폭행', '일반폭력', '기타'] },
     { id: 'assaultRelation', label: '피고소인과의 관계', options: ['배우자', '가족', '연인', '친구', '모르는 사람', '기타'] },
-    { id: 'assaultCondition', label: '피해 상태', options: ['부어오름', '피가 남', '뼈가 부러짐', '멍', '외부 상처 없음', '기타'] },
-    { id: 'assaultMethod', label: '폭행 방법', options: ['멱살을 잡음', '밀침', '잡아당김', '주먹으로 때림', '발로 참', '물건을 던짐', '흉기를 휘두름', '기타'] },
+    { id: 'assaultCondition', label: '피해 상태', multiple: true, options: ['부어오름', '피가 남', '뼈가 부러짐', '멍', '외부 상처 없음', '기타'] },
+    { id: 'assaultMethod', label: '폭행 방법', multiple: true, options: ['멱살을 잡음', '밀침', '잡아당김', '주먹으로 때림', '발로 참', '물건을 던짐', '흉기를 휘두름', '기타'] },
     { id: 'assaultHospital', label: '병원 치료', options: ['치료받음', '치료받지 않음', '모름'] },
     { id: 'assaultMutual', label: '쌍방 폭행 여부', options: ['저도 때렸습니다', '벗어나기 위해 힘을 행사했습니다', '전혀 때리지 않았습니다', '모름'] },
   ],
@@ -26,10 +26,10 @@ export const checklistQuestions = {
     { id: 'fraudLivedTogether', label: '피고소인과 동거한 사실이 있나요?' },
     { id: 'fraudKnewLong', label: '피고소인과 오랫동안 알고 지낸 관계인가요?' },
     { id: 'fraudContactable', label: '피고소인과 현재 연락이 가능한가요?' },
-    { id: 'fraudPreviousTrade', label: '피고소인과 이전에도 유사한 거래나 계약이 있었나요?' },
+    { id: 'fraudPreviousTrade', label: '피고소인이 이전에도 유사한 거래나 계약을 한 사실이 있나요?' },
     { id: 'fraudPromise', label: '상대방이 재산 상황이나 이행 방법을 이야기하며 믿어달라고 했나요?' },
     { id: 'previousComplaint', label: '같은 내용의 고소장을 다른 경찰서나 검찰청에 제출했나요?' },
-    { id: 'withdrawnComplaint', label: '같은 내용의 고소를 취소한 적이 있나요?' },
+    { id: 'withdrawnComplaint', label: '같은 내용의 고소를 취소하거나 처벌을 원하지 않는다는 의사를 표현한 적이 있나요?' },
   ],
   defamation: [
     { id: 'defamationFamily', label: '피고소인이 가족 또는 친척인가요?' },
@@ -39,7 +39,9 @@ export const checklistQuestions = {
     { id: 'defamationPublicPlace', label: '공개적인 장소에서 발생했나요?' },
     { id: 'defamationOthersKnew', label: '다른 사람이 내용을 알게 되었나요?' },
     { id: 'defamationOneToOne', label: '고소인과 피고소인 단둘이 있는 상황이었나요?' },
+    { id: 'defamationWithdraw', label: '원만히 해결되면 고소를 취소할 의사가 있나요?' },
     { id: 'previousComplaint', label: '같은 내용의 고소장을 다른 경찰서나 검찰청에 제출했나요?' },
+    { id: 'withdrawnComplaint', label: '같은 내용의 고소를 취소하거나 처벌을 원하지 않는다는 의사를 표현한 적이 있나요?' },
   ],
   assault: [
     { id: 'assaultSudden', label: '피고소인이 갑자기 폭행했나요?' },
@@ -48,6 +50,15 @@ export const checklistQuestions = {
     { id: 'assaultCctv', label: '폭행 당시 주변에 CCTV가 있었나요?' },
     { id: 'assaultWithdraw', label: '원만히 해결되면 고소를 취소할 의사가 있나요?' },
     { id: 'previousComplaint', label: '같은 내용의 고소장을 다른 경찰서나 검찰청에 제출했나요?' },
-    { id: 'withdrawnComplaint', label: '같은 내용의 고소를 취소한 적이 있나요?' },
+    { id: 'withdrawnComplaint', label: '같은 내용의 고소를 취소하거나 처벌을 원하지 않는다는 의사를 표현한 적이 있나요?' },
   ],
 }
+
+export const evidenceQuestions = {
+  fraud: { id: 'evidenceTypes', label: '제출 예정인 증거자료', multiple: true, options: ['차용증', '계좌거래내역', '계약서 등', '문자·통화내역', '자료 없음'] },
+  defamation: { id: 'evidenceTypes', label: '제출 예정인 증거자료', multiple: true, options: ['모욕 영상·사진', '목격자 진술서', '자료 없음'] },
+  assault: { id: 'evidenceTypes', label: '제출 예정인 증거자료', multiple: true, options: ['진단서', '상처 사진', '문자·통화내역', '폭행 영상·사진', '목격자 진술서', '자료 없음'] },
+}
+export const punishmentQuestion = { id: 'punishment', label: '처벌 희망 여부', options: ['처벌을 원함', '처벌을 원하지 않음', '미정'] }
+export const selectedOptions = (value) => String(value || '').split(' | ').filter(Boolean)
+export const hasSelectedOption = (value, option) => selectedOptions(value).includes(option)

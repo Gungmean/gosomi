@@ -4,12 +4,14 @@ import { AnimatePresence, motion } from 'motion/react'
 import { ChevronLeft, FileText, Pencil, QrCode, ShieldCheck, X } from 'lucide-react'
 import type { ComplaintDraft } from '../types'
 import { templateLabels } from '../types'
-import { checklistQuestions, officialFormSource, typeQuestions } from '../formConfig'
+import { checklistQuestions, officialFormSource, typeQuestions, evidenceQuestions, punishmentQuestion, selectedOptions, hasSelectedOption } from '../formConfig'
 import ComplaintDocument from './ComplaintDocument'
 import QrDownloadDialog from './QrDownloadDialog'
+import SupplementalEditor from './SupplementalEditor'
+import { selectedFormValues } from '../../shared/officialForm.mjs'
 import { extraDetailFields, privateDetailFields, fillDummyPersonalInfo } from '../documentDetails'
 
-type Field = Exclude<keyof ComplaintDraft, 'type' | 'selections' | 'documentDetails'>
+type Field = { [K in keyof ComplaintDraft]: ComplaintDraft[K] extends string ? K : never }[keyof ComplaintDraft]
 
 const fields: { key: Field; label: string; group: string; multiline?: boolean; placeholder?: string }[] = [
   { key: 'complainantName', label: '성명', group: '고소인' },
@@ -63,7 +65,7 @@ export default function ComplaintPanel({
 
   function jumpToField(field: string) {
     setTab('edit')
-    window.setTimeout(() => document.getElementById(`draft-${field}`)?.focus(), 40)
+    window.setTimeout(() => document.getElementById(`draft-${field.replace(/^selections\./, '')}`)?.focus(), 40)
   }
 
   function onHandleEnd(event: React.PointerEvent<HTMLButtonElement>) {
@@ -72,8 +74,10 @@ export default function ComplaintPanel({
   }
 
   function setSelection(key: string, value: string) {
-    onChange({ selections: { ...draft.selections, [key]: value } })
+    onChange({ selections: { ...draft.selections, [key]: value }, manualSelections: [...new Set([...(draft.manualSelections || []), key])], selectionEvidence: { ...draft.selectionEvidence, [key]: '' } })
   }
+
+  const selected = selectedFormValues(draft)
 
   return (
     <>
@@ -145,11 +149,13 @@ export default function ComplaintPanel({
                 {draft.type !== 'general' && <div className="form-group">
                   <h3>{templateLabels[draft.type]} 관련 선택 항목</h3>
                   {draft.type === 'assault' && <label className="form-field"><span>폭행을 당한 부위</span><input id="draft-assaultBodyPart" value={draft.selections.assaultBodyPart || ''} onChange={(event) => setSelection('assaultBodyPart', event.target.value)} placeholder="예: 오른쪽 팔, 뺨" /></label>}
-                  {typeQuestions[draft.type].map((item) => <label className="form-field" key={item.id}><span>{item.label}</span><select id={`draft-${item.id}`} value={draft.selections[item.id] || ''} onChange={(event) => setSelection(item.id, event.target.value)}><option value="">선택해주세요</option>{item.options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>)}
+                  {draft.type === 'defamation' && <label className="form-field"><span>피고소인이 실제 말하거나 기재한 내용</span><textarea id="draft-defamationQuote" rows={4} value={draft.selections.defamationQuote || ''} onChange={(event) => setSelection('defamationQuote', event.target.value)} placeholder="상대방의 말을 원문 그대로 입력해주세요" /></label>}
+                  {[...typeQuestions[draft.type], punishmentQuestion, evidenceQuestions[draft.type], ...(draft.type === 'fraud' ? [{ id: 'damageKnown', label: '피해 금액 확인 여부', options: ['금액 확인', '모름'] }] : [])].map((item) => item.multiple ? <fieldset id={`draft-${item.id}`} tabIndex={-1} className="form-choice-field" key={item.id}><legend>{item.label} (복수 선택)</legend><div className="form-multi-options">{item.options.map((option) => <label className="form-multi-option" key={option}><input type="checkbox" checked={hasSelectedOption(selected[item.id], option)} onChange={(event) => { const current = selectedOptions(selected[item.id]); const next = event.target.checked ? [...current.filter((value) => value !== '자료 없음'), option] : current.filter((value) => value !== option); setSelection(item.id, option === '자료 없음' && event.target.checked ? option : next.join(' | ')) }} /><span>{option}</span></label>)}</div></fieldset> : <label className="form-field" key={item.id}><span>{item.label}</span><select id={`draft-${item.id}`} value={selected[item.id] || ''} onChange={(event) => setSelection(item.id, event.target.value)}><option value="">선택해주세요</option>{item.options.map((option) => <option key={option} value={option}>{option}</option>)}</select></label>)}
                   <h3 className="form-subheading">고소 관련 체크리스트</h3>
-                  <p className="form-checklist-note">확인된 항목만 답해주세요. 모르는 내용은 모름으로 표시할 수 있어요.</p>
-                  {checklistQuestions[draft.type].map((item) => <fieldset className="form-choice-field" key={item.id}>
+                  <p className="form-checklist-note">대화에서 확인된 내용은 자동으로 채워집니다. 근거가 없는 항목은 비워두며, 여기서 직접 수정할 수 있어요.</p>
+                  {checklistQuestions[draft.type].map((item) => <fieldset id={`draft-${item.id}`} tabIndex={-1} className="form-choice-field" key={item.id}>
                     <legend>{item.label}</legend>
+                    {draft.selectionEvidence?.[item.id] && <p className="form-auto-evidence">대화에서 반영: {draft.selectionEvidence[item.id]}</p>}
                     <div className="form-choice-options">
                       {['예', '아니오', '모름'].map((option) => <label className={`form-choice-option${draft.selections[item.id] === option ? ' is-selected' : ''}`} key={option}>
                         <input type="radio" name={`draft-${item.id}`} value={option} checked={draft.selections[item.id] === option} onChange={() => setSelection(item.id, option)} />
@@ -161,8 +167,9 @@ export default function ComplaintPanel({
                 </div>}
                 <div className="form-group"><h3>추가 정보와 제출 정보</h3><p className="form-checklist-note">해당하는 항목만 입력하세요. 입력한 내용은 원본 서식 또는 별지에 반영됩니다.</p>
                   {privateDetailFields.map((field) => <label className="form-field" key={field.key}><span>{field.label}</span><input id={`draft-details.${field.key}`} value={draft.documentDetails?.[field.key] || ''} placeholder={`${field.label} 입력`} onChange={(event) => onChange({ documentDetails: { ...draft.documentDetails, [field.key]: event.target.value } })} /></label>)}
-                  {extraDetailFields.filter((field) => (!field.types || field.types.includes(draft.type)) && (!field.when || draft.selections[field.when] === field.option || draft.documentDetails?.[field.key])).map((field) => <label className="form-field" key={field.key}><span>{field.label}</span><input id={`draft-details.${field.key}`} value={draft.documentDetails?.[field.key] || ''} placeholder={field.placeholder} onChange={(event) => onChange({ documentDetails: { ...draft.documentDetails, [field.key]: event.target.value } })} /></label>)}
+                  {extraDetailFields.filter((field) => (!field.types || field.types.includes(draft.type)) && (!field.when || hasSelectedOption(draft.selections[field.when], field.option || '') || draft.documentDetails?.[field.key])).map((field) => <label className="form-field" key={field.key}><span>{field.label}</span><input id={`draft-details.${field.key}`} value={draft.documentDetails?.[field.key] || ''} placeholder={field.placeholder} onChange={(event) => onChange({ documentDetails: { ...draft.documentDetails, [field.key]: event.target.value } })} /></label>)}
                 </div>
+                <SupplementalEditor draft={draft} onChange={onChange} />
               </Tabs.Content>
             </Tabs.Root>
             <div className="panel-footer">

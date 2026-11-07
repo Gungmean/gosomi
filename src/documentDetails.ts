@@ -56,7 +56,7 @@ export function fillDummyPersonalInfo(draft: ComplaintDraft): Partial<ComplaintD
   }
   for (const field of [...privateDetailFields, ...extraDetailFields]) {
     if ('types' in field && field.types && !field.types.includes(draft.type)) continue
-    if ('when' in field && field.when && draft.selections[field.when] !== field.option) continue
+    if ('when' in field && field.when && !String(draft.selections[field.when] || '').split(' | ').includes(field.option || '')) continue
     if (!details[field.key]?.trim()) details[field.key] = detailExamples[field.key]
   }
   if (Object.keys(patch).length || Object.entries(details).some(([key, value]) => value !== draft.documentDetails?.[key])) {

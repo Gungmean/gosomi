@@ -1,4 +1,5 @@
 import type { ComplaintDraft } from './types'
+import { normalizeSupplementalData } from '../shared/draftData.mjs'
 
 const sharePrefix = 'gosomi-share='
 const allowedTypes = new Set(['fraud', 'defamation', 'assault', 'general'])
@@ -21,29 +22,7 @@ function fromBase64Url(value: string) {
 export async function createShareUrl(draft: ComplaintDraft) {
   if (!('CompressionStream' in window)) throw new Error('이 브라우저에서는 QR 다운로드를 지원하지 않습니다.')
 
-  const shareDraft: ComplaintDraft = {
-    ...draft,
-    complainantName: draft.complainantName.slice(0, 500),
-    complainantBirth: draft.complainantBirth.slice(0, 500),
-    complainantAddress: draft.complainantAddress.slice(0, 500),
-    complainantPhone: draft.complainantPhone.slice(0, 500),
-    accusedName: draft.accusedName.slice(0, 500),
-    accusedAddress: draft.accusedAddress.slice(0, 500),
-    accusedPhone: draft.accusedPhone.slice(0, 500),
-    accusedOnlineId: draft.accusedOnlineId.slice(0, 500),
-    accusedAccount: draft.accusedAccount.slice(0, 500),
-    incidentDate: draft.incidentDate.slice(0, 500),
-    incidentTime: draft.incidentTime.slice(0, 500),
-    incidentPlace: draft.incidentPlace.slice(0, 2000),
-    incidentSummary: draft.incidentSummary.slice(0, 12000),
-    damage: draft.damage.slice(0, 6000),
-    reason: draft.reason.slice(0, 6000),
-    evidence: draft.evidence.slice(0, 6000),
-    request: draft.request.slice(0, 3000),
-    relatedCase: draft.relatedCase.slice(0, 2000),
-    selections: Object.fromEntries(Object.entries(draft.selections || {}).map(([key, value]) => [key.slice(0, 64), value.slice(0, 500)])),
-    documentDetails: Object.fromEntries(Object.entries(draft.documentDetails || {}).map(([key, value]) => [key.slice(0, 64), value.slice(0, 500)])),
-  }
+  const shareDraft = draft
   const stream = new Blob([JSON.stringify(shareDraft)]).stream().pipeThrough(new CompressionStream('gzip'))
   const compressed = new Uint8Array(await new Response(stream).arrayBuffer())
   const url = new URL(window.location.href)
@@ -89,17 +68,17 @@ export async function decodeShareDraft(payload: string): Promise<ComplaintDraft>
     'incidentDate', 'incidentTime', 'incidentPlace', 'incidentSummary', 'damage', 'reason',
     'evidence', 'request', 'relatedCase',
   ] as const
-  const cleanDraft = { ...draft, selections: {} as Record<string, string>, documentDetails: {} as Record<string, string> }
-  for (const key of textFields) cleanDraft[key] = typeof draft[key] === 'string' ? draft[key].slice(0, 12000) : ''
+  const cleanDraft = { ...draft, ...normalizeSupplementalData(draft), selections: {} as Record<string, string>, documentDetails: {} as Record<string, string> }
+  for (const key of textFields) cleanDraft[key] = typeof draft[key] === 'string' ? draft[key] : ''
   if (draft.selections && typeof draft.selections === 'object') {
     cleanDraft.selections = Object.fromEntries(Object.entries(draft.selections)
       .filter(([key, value]) => /^[a-zA-Z0-9_-]{1,64}$/.test(key) && typeof value === 'string')
-      .map(([key, value]) => [key, value.slice(0, 500)]))
+      .map(([key, value]) => [key, value]))
   }
   if (draft.documentDetails && typeof draft.documentDetails === 'object') {
     cleanDraft.documentDetails = Object.fromEntries(Object.entries(draft.documentDetails)
       .filter(([key, value]) => /^[a-zA-Z0-9_-]{1,64}$/.test(key) && typeof value === 'string')
-      .map(([key, value]) => [key, value.slice(0, 500)]))
+      .map(([key, value]) => [key, value]))
   }
   return cleanDraft
 }
