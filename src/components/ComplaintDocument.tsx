@@ -1,5 +1,6 @@
 import type { ComplaintDraft, ComplaintType } from '../types'
 import { templateLabels } from '../types'
+import { extraDetailFields, privateDetailFields } from '../documentDetails'
 import { checklistQuestions, officialFormSource } from '../formConfig'
 import { TypedDocumentText } from './TypewriterText'
 
@@ -81,10 +82,10 @@ function OfficialPage({
       type="button"
       key={`${field}-${position.left}-${position.top}`}
       className={`official-value${multiline ? ' official-value-multiline' : ''}`}
-      style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size, backgroundColor: field === 'accusedBank' ? '#fff' : undefined }}
+      style={{ left: position.left, top: position.top, width: position.width, height: position.height, fontSize: position.size, backgroundColor: field === 'accusedBank' || field.startsWith('details.') ? '#fff' : undefined }}
       title={`${field} 내용 수정: ${value}`}
       aria-label={`${field} 내용 수정: ${value}`}
-      onClick={() => onFieldClick(field === 'accusedBank' ? 'accusedAccount' : field)}
+      onClick={() => onFieldClick(field === 'accusedBank' ? 'accusedAccount' : field.startsWith('writtenDate-') ? 'details.writtenDate' : field)}
     ><TypedDocumentText text={value} animateKey={animatedFields?.[field]} /></button>)}
   </div>
 }
@@ -174,7 +175,44 @@ function OfficialComplaint({
     request: draft.request,
     evidence: draft.evidence,
   }
+  const details = draft.documentDetails || {}
   const firstPositions = { ...first }
+  const detailPosition = (key: string, left: number, top: number, width: number) => {
+    firstPositions[`details.${key}`] = { left: `${left}%`, top: `${top}%`, width: `${width}%`, size: '1.65cqw' }
+    values[`details.${key}`] = details[key] || ''
+  }
+  const rowTop = { fraud: [16.3, 39.6, 25.1], defamation: [16.6, 37, 25.4], assault: [18.2, 40, 27] }[type]
+  detailPosition('complainantResidentId', 61, rowTop[0], 26)
+  detailPosition('accusedResidentId', 61, rowTop[1], 26)
+  detailPosition('agentName', 38, rowTop[2], 12)
+  detailPosition('agentRelation', 69, rowTop[2], 15)
+  detailPosition('agentPhone', 41, rowTop[2] + 2, 16)
+  detailPosition('agentOfficePhone', 65, rowTop[2] + 2, 20)
+  if (type !== 'assault') detailPosition('accusedSite', 47, type === 'fraud' ? 50.2 : 43.2, 40)
+  if (type === 'defamation' && draft.selections.defamationKnownHow === '기타') detailPosition('defamationKnownDetail', 64, 79, 21)
+  if (type === 'assault') {
+    if (draft.selections.assaultRelation === '기타') detailPosition('assaultRelationDetail', 75, 68, 10)
+    if (draft.selections.assaultCondition === '기타') detailPosition('assaultConditionDetail', 47, 89, 27)
+  }
+  const secondPositions = { ...second }
+  const secondDetail = (key: string, left: number, top: number, width: number) => {
+    secondPositions[`details.${key}`] = { left: `${left}%`, top: `${top}%`, width: `${width}%`, size: '1.65cqw' }
+    values[`details.${key}`] = details[key] || ''
+  }
+  if (type === 'assault') {
+    if (draft.selections.assaultMethod === '물건을 던짐') secondDetail('assaultObject', 64, 13.3, 14)
+    if (draft.selections.assaultMethod === '흉기를 휘두름') secondDetail('assaultWeapon', 64, 15.4, 14)
+    if (draft.selections.assaultMethod === '기타') secondDetail('assaultMethodDetail', 45, 17.5, 34)
+    if (draft.selections.assaultHospital === '치료받음') secondDetail('hospitalVisits', 59, 20.2, 3)
+  }
+  const writtenDate = formDateParts(details.writtenDate || '')
+  const writtenTop = type === 'assault' ? 83.1 : 82.5
+  for (const [part, left] of [['year', 33.5], ['month', 44.5], ['day', 54.5]] as const) {
+    secondPositions[`writtenDate-${part}`] = { left: `${left}%`, top: `${writtenTop}%`, width: part === 'year' ? '5%' : '3%', size: '1.7cqw' }
+    values[`writtenDate-${part}`] = writtenDate[part]
+  }
+  if (details.policeStation) secondDetail('policeStation', 35, type === 'assault' ? 89.5 : 89, 18)
+
   if (type === 'defamation') {
     const channel = draft.selections.defamationChannel?.replace(/\s/g, '')
     const detailPositions: Record<string, Position> = {
@@ -215,8 +253,10 @@ function OfficialComplaint({
     { field: 'incidentTime', value: time.minute, position: { left: '70.8%', top: dateTimeTop, width: '3.3%', size: '1.7cqw' } },
   ]
 
-  const needsAttachment = needsSupplementalPage(draft)
+  const needsAttachment = needsSupplementalPage(draft) || Boolean(draft.complainantBirth) || [...privateDetailFields, ...extraDetailFields].some(({ key }) => Boolean(details[key]))
   const attachmentRows = [
+    ...[...privateDetailFields, ...extraDetailFields].filter((field) => !('types' in field) || !field.types || field.types.includes(type)).map(({ key, label }) => ({ key: `details.${key}`, label, value: details[key] || '', animateKey: undefined })),
+    { key: 'complainantBirth', label: '고소인 생년월일', value: draft.complainantBirth, animateKey: undefined },
     { key: 'assaultType', label: '폭행 종류', value: type === 'assault' && draft.selections.assaultType === '기타' ? '기타' : '', animateKey: undefined },
     { key: 'complainantName', label: '고소인 성명', value: draft.complainantName, animateKey: animatedFields?.complainantName },
     { key: 'complainantAddress', label: '고소인 주소', value: draft.complainantAddress, animateKey: animatedFields?.complainantAddress },
@@ -353,9 +393,9 @@ function OfficialComplaint({
   }
 
   return <div className="document-print-root official-document" aria-label={`${templateLabels[type]} 경찰청 간이 고소장 미리보기`}>
-    <div className="official-form-note">경찰청 원본 서식 · 입력한 내용은 빈칸에 표시됩니다 · 주민등록번호 등 민감한 정보는 출력 후 직접 작성하세요{needsSupplementalPage(draft) ? ' · 별지 포함' : ''}</div>
+    <div className="official-form-note">{details.containsDummyData === 'true' ? '더미 데이터가 포함된 시연용 문서 · ' : ''}경찰청 원본 서식 · 입력한 내용은 빈칸에 표시됩니다{needsAttachment ? ' · 별지 포함' : ''}</div>
     <OfficialPage src={officialPages[type][0]} pageNumber={1} fields={[...makeFields(firstPositions), ...dateTimeFields]} marks={firstMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
-    <OfficialPage src={officialPages[type][1]} pageNumber={2} fields={makeFields(second)} marks={secondMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
+    <OfficialPage src={officialPages[type][1]} pageNumber={2} fields={makeFields(secondPositions)} marks={secondMarks} animatedFields={animatedFields} onFieldClick={onFieldClick} />
     {needsAttachment && <article className="paper official-attachment">
       <h1>별지 · 사건 경위 및 추가 내용</h1>
       <p className="document-note">원본 양식에 들어가지 않거나 칸을 넘는 내용은 빠짐없이 별지에 정리했습니다. 제출 전 사실과 표현을 확인해주세요.</p>
@@ -391,14 +431,17 @@ export default function ComplaintDocument({
 }) {
   if (draft.type !== 'general') return <OfficialComplaint draft={draft} animatedFields={animatedFields} onFieldClick={onFieldClick} />
   return <div className="document-print-root"><article className="paper" aria-label="일반 고소장 초안 미리보기">
-    <div className="paper-head"><h1>고소장 초안</h1><p className="paper-subtitle">일반 사건</p></div>
+    <div className="paper-head"><h1>고소장 초안</h1><p className="paper-subtitle">일반 사건{draft.documentDetails?.containsDummyData === 'true' ? ' · 더미 데이터가 포함된 시연용 문서' : ''}</p></div>
     <section className="document-section"><h2>1. 고소인</h2><div className="document-table">
       <Row label="성명" value={draft.complainantName} animateKey={animatedFields?.complainantName} onClick={() => onFieldClick('complainantName')} />
+      <Row label="생년월일" value={draft.complainantBirth} onClick={() => onFieldClick('complainantBirth')} />
+      {draft.documentDetails?.complainantResidentId && <Row label="주민등록번호" value={draft.documentDetails.complainantResidentId} onClick={() => onFieldClick('details.complainantResidentId')} />}
       <Row label="주소" value={draft.complainantAddress} animateKey={animatedFields?.complainantAddress} onClick={() => onFieldClick('complainantAddress')} />
       <Row label="연락처" value={draft.complainantPhone} animateKey={animatedFields?.complainantPhone} onClick={() => onFieldClick('complainantPhone')} />
     </div></section>
     <section className="document-section"><h2>2. 피고소인</h2><div className="document-table">
       <Row label="성명" value={draft.accusedName} animateKey={animatedFields?.accusedName} onClick={() => onFieldClick('accusedName')} placeholder="성명 미상" />
+      {draft.documentDetails?.accusedResidentId && <Row label="주민등록번호" value={draft.documentDetails.accusedResidentId} onClick={() => onFieldClick('details.accusedResidentId')} />}
       <Row label="주소" value={draft.accusedAddress} animateKey={animatedFields?.accusedAddress} onClick={() => onFieldClick('accusedAddress')} />
       <Row label="연락처" value={draft.accusedPhone} animateKey={animatedFields?.accusedPhone} onClick={() => onFieldClick('accusedPhone')} />
     </div></section>
@@ -411,9 +454,15 @@ export default function ComplaintDocument({
       <Row label="증거자료" value={draft.evidence} animateKey={animatedFields?.evidence} onClick={() => onFieldClick('evidence')} />
     </div></section>
     <section className="document-section"><h2>4. 고소 이유</h2><div className="document-paragraph" onClick={() => onFieldClick('reason')} role="button" tabIndex={0} onKeyDown={(event) => event.key === 'Enter' && onFieldClick('reason')}><Value value={draft.reason} animateKey={animatedFields?.reason} placeholder="고소에 이르게 된 경위와 이유를 작성합니다." multiline /></div></section>
+    <section className="document-section"><h2>5. 추가 정보</h2><div className="document-table">
+      <Row label="ID·닉네임" value={draft.accusedOnlineId} onClick={() => onFieldClick('accusedOnlineId')} />
+      <Row label="계좌번호" value={draft.accusedAccount} onClick={() => onFieldClick('accusedAccount')} />
+      <Row label="관련 수사·재판" value={draft.relatedCase} onClick={() => onFieldClick('relatedCase')} />
+      {[...privateDetailFields.filter(({ residentId }) => !residentId), ...extraDetailFields.filter((field) => !field.types || field.types.includes('general'))].filter(({ key }) => draft.documentDetails?.[key]).map(({ key, label }) => <Row key={key} label={label} value={draft.documentDetails[key]} onClick={() => onFieldClick(`details.${key}`)} />)}
+    </div></section>
     <p className="document-declaration">위 내용은 고소인이 알고 있는 사실에 기초하여 작성한 초안입니다. 제출 전에 사실관계와 첨부자료를 직접 확인해 주세요.</p>
-    <div className="document-signature"><span>작성일: <Value value={new Date().toLocaleDateString('ko-KR')} /></span><span>고소인: <Value value={draft.complainantName} animateKey={animatedFields?.complainantName} /> (인)</span></div>
-    <div className="document-recipient">○○경찰서 귀중</div>
+    <div className="document-signature"><span>작성일: <Value value={draft.documentDetails?.writtenDate || new Date().toLocaleDateString('ko-KR')} /></span><span>고소인: <Value value={draft.complainantName} animateKey={animatedFields?.complainantName} /> (인)</span></div>
+    <div className="document-recipient">{draft.documentDetails?.policeStation || '○○경찰서'} 귀중</div>
     <div className="document-source">서식 기준: <a href={policeFormsUrl} target="_blank" rel="noreferrer">경찰민원24 민원 서식</a> · 제출 전 관할 경찰서 서식을 확인해 주세요.</div>
   </article></div>
 }

@@ -436,6 +436,15 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .form-field input:focus, .form-field select:focus, .form-field textarea:focus { border-color: #81bd8f; box-shadow: 0 0 0 3px #eaf6ec; }
 .form-field input::placeholder, .form-field textarea::placeholder { color: #b2bab3; }
 .form-field textarea { resize: vertical; min-height: 76px; }
+.sensitive-fill-button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 15px 16px; margin: 0 0 20px; border: 1px solid #cadfce; border-radius: 10px; background: #f1f8f2; color: #155d28; text-align: left; }
+.sensitive-fill-button > span { display: grid; flex: 1; gap: 5px; }
+.sensitive-fill-button strong { font-size: 13px; font-weight: 740; }
+.sensitive-fill-button small { font-size: 11px; line-height: 1.5; color: #43644b; }
+.sensitive-fill-button:hover { background: #e7f2e9; border-color: #7aaa85; }
+.sensitive-fill-button svg { flex-shrink: 0; }
+.sensitive-save-notice { color: #155d28; font-size: 12px; margin: 0 0 16px; }
+.panel-edit-scroll .form-checklist-note { color: #58675b; font-size: 12px; line-height: 1.6; }
+@media print { .sensitive-fill-button, .sensitive-save-notice { display: none !important; } }
 .form-choice-field { min-width: 0; margin: 0 0 18px; padding: 0; border: 0; }
 .form-choice-field legend { padding: 0; color: #555d56; font-size: 12px; font-weight: 670; line-height: 1.5; }
 .form-choice-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
@@ -516,6 +525,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 @media (min-width: 751px) {
+  .case-mode-picker button { border-color: #d9e1d8; background: #fbfcfa; }
+  .case-mode-picker button.selected { border-color: var(--green); background: var(--green); box-shadow: none; color: #fff; }
+  .case-mode-picker button.selected span { color: #e1efe3; }
+  .incident-type-picker { padding: 13px 15px 14px; border: 1px solid #e9e1d0; border-radius: 10px; background: #f7f3e9; color: #493d2c; }
+  .incident-type-options button { border-color: #ddd3c0; background: #fffdf8; color: #625746; }
+  .incident-type-options button:hover { border-color: #9e8864; background: #fff; }
+  .incident-type-options button.selected { border-color: #765b36; background: #765b36; color: #fff; }
   .desktop-sidebar-toggle { width: 36px; height: 36px; margin-right: 9px; display: grid; flex: 0 0 36px; border: 1px solid transparent; color: #667269; }
   .desktop-sidebar-toggle:hover { border-color: #e3eae4; background: #f5f8f5; color: var(--green); }
   .sidebar { transition: width .22s ease, flex-basis .22s ease, padding .22s ease, opacity .14s ease; }
@@ -620,4 +636,63 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .official-attachment { padding-top: 7mm; padding-bottom: 7mm; }
   .official-attachment .document-signature { margin-top: 4px; break-inside: avoid; page-break-inside: avoid; }
   .official-attachment h1 { font-size: 16pt; }
+}
+
+/* QR hand-off: the document stays local and is rendered on the receiving device. */
+.qr-dialog-overlay { position: fixed; inset: 0; z-index: 100; background: rgb(16 28 19 / 42%); backdrop-filter: blur(3px); }
+.qr-dialog { position: fixed; z-index: 101; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(460px, calc(100vw - 32px)); max-height: min(90dvh, 760px); overflow: auto; border: 1px solid #e3e9e2; border-radius: 22px; background: #fff; color: #18221a; box-shadow: 0 28px 90px rgb(16 34 20 / 25%); outline: none; }
+.qr-dialog-head { position: relative; padding: 26px 28px 17px; }
+.qr-dialog-icon, .share-download-mark { display: grid; width: 46px; height: 46px; place-items: center; border-radius: 15px; background: #edf4ee; color: #28632e; }
+.qr-dialog-close { position: absolute; top: 21px; right: 21px; display: grid; width: 36px; height: 36px; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #718073; cursor: pointer; }
+.qr-dialog-close:hover { background: #f3f6f3; color: #1b2d1d; }
+.qr-dialog-head h2 { margin: 19px 0 6px; font-size: 21px; letter-spacing: -.035em; }
+.qr-dialog-head p { margin: 0; color: #728074; font-size: 13px; line-height: 1.65; }
+.qr-dialog-body { display: flex; flex-direction: column; align-items: center; padding: 7px 28px 26px; }
+.qr-image-frame { display: grid; width: 250px; height: 250px; place-items: center; border: 1px solid #e7ece7; border-radius: 20px; background: #fff; }
+.qr-image-frame img { display: block; width: 226px; height: 226px; image-rendering: pixelated; }
+.qr-image-loading { padding: 24px; color: #738075; font-size: 13px; text-align: center; }
+.qr-dialog-copy { display: grid; gap: 5px; width: 100%; margin: 17px 0; text-align: center; }
+.qr-dialog-copy strong { font-size: 14px; }
+.qr-dialog-copy span, .qr-dialog-expiry { color: #7a867c; font-size: 12px; line-height: 1.6; }
+.qr-privacy-note, .share-download-privacy { display: flex; align-items: flex-start; gap: 9px; width: 100%; padding: 12px 13px; border: 1px solid #e5ebe5; border-radius: 12px; background: #f7faf7; color: #647267; font-size: 11px; line-height: 1.6; }
+.qr-privacy-note svg, .share-download-privacy svg { flex: 0 0 auto; margin-top: 1px; color: #34733b; }
+.qr-dialog-error, .share-download-error { display: flex; align-items: flex-start; gap: 7px; width: 100%; margin: 12px 0 0; color: #a43e35; font-size: 12px; line-height: 1.55; }
+.qr-dialog-error { justify-content: center; text-align: center; }
+.qr-download-here, .share-download-button { display: flex; align-items: center; justify-content: center; gap: 9px; width: 100%; min-height: 48px; margin-top: 14px; border: 0; border-radius: 12px; background: #28632e; color: #fff; font-weight: 700; cursor: pointer; transition: background .18s ease, transform .18s ease; }
+.qr-download-here:hover:not(:disabled), .share-download-button:hover:not(:disabled) { transform: translateY(-1px); background: #1e5225; }
+.qr-download-here:disabled, .share-download-button:disabled { cursor: wait; opacity: .55; }
+.qr-dialog-expiry { margin-top: 10px; text-align: center; }
+.qr-dialog-document { position: fixed; top: 0; left: -12000px; width: 210mm; pointer-events: none; background: #fff; }
+.qr-dialog-document .official-document, .share-document-stage .official-document { width: 210mm; max-width: none; margin: 0; }
+.qr-dialog-document .official-page, .share-document-stage .official-page { width: 210mm; height: 297mm; aspect-ratio: auto; margin: 0; box-shadow: none; break-after: page; page-break-after: always; }
+.qr-dialog-document .official-page-image, .share-document-stage .official-page-image { width: 100%; height: 100%; }
+.qr-dialog-document .official-attachment, .share-document-stage .official-attachment { width: 210mm; min-height: 297mm; aspect-ratio: auto; padding: 7mm 18mm; box-shadow: none; break-inside: auto; page-break-inside: auto; }
+.qr-dialog-document .paper, .share-document-stage .paper { width: 210mm; min-height: 297mm; padding: 18mm; box-shadow: none; }
+.qr-dialog-document .official-form-note, .qr-dialog-document .official-source { display: none !important; }
+.share-download-page { min-height: 100dvh; padding: 36px 18px 56px; background: #f5f7f4; color: #17231a; }
+.share-download-card { width: min(560px, 100%); margin: 0 auto; padding: 28px; border: 1px solid #e3e9e2; border-radius: 20px; background: #fff; box-shadow: 0 8px 32px rgb(25 46 27 / 5%); }
+.share-download-mark { width: 44px; height: 44px; }
+.share-download-kicker { margin: 17px 0 7px; color: #56705a; font-size: 12px; font-weight: 650; }
+.share-download-card h1 { margin: 0; font-size: clamp(21px, 5vw, 27px); letter-spacing: -.04em; }
+.share-download-summary { margin: 9px 0 16px; color: #68776b; font-size: 14px; }
+.share-download-button { min-height: 52px; margin-top: 0; font-size: 15px; }
+.share-download-status { margin: 10px 0 17px; color: #758077; font-size: 12px; line-height: 1.65; }
+.share-download-privacy { margin-top: 15px; }
+.share-download-error { margin-top: 14px; font-size: 13px; }
+.share-document-section { width: min(860px, 100%); margin: 30px auto 0; }
+.share-document-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; color: #536457; font-size: 13px; }
+.share-document-heading span { color: #879188; font-size: 11px; }
+.share-document-stage { overflow: auto; padding: 18px; border: 1px solid #e2e8e1; border-radius: 16px; background: #e9ede8; }
+.share-document-stage .document-print-root { width: 210mm; margin: 0 auto; transform-origin: top left; }
+.share-download-home { display: block; width: fit-content; margin: 20px auto 0; color: #56705a; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
+
+@media (max-width: 560px) {
+  .qr-dialog { border-radius: 18px; }
+  .qr-dialog-head { padding: 22px 21px 14px; }
+  .qr-dialog-body { padding: 7px 21px 22px; }
+  .qr-image-frame { width: 228px; height: 228px; }
+  .qr-image-frame img { width: 206px; height: 206px; }
+  .share-download-page { padding: 18px 12px 36px; }
+  .share-download-card { padding: 22px 18px; border-radius: 16px; }
+  .share-document-stage { padding: 10px; }
 }

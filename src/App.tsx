@@ -9,6 +9,7 @@ import {
 import { askAi, getAutomaticPrecedentQuery, searchPrecedents } from './api'
 import { demoScenarios, type DemoScenario } from './demoScenarios'
 import ComplaintPanel from './components/ComplaintPanel'
+import ShareDownload from './components/ShareDownload'
 import ResponsePanel from './components/ResponsePanel'
 import ReceivedDocuments from './components/ReceivedDocuments'
 import FollowUpQuestions from './components/FollowUpQuestions'
@@ -20,6 +21,7 @@ import { isValidApiKeyFormat, loadConversations, loadSettings, saveConversations
 import { deleteDocumentFile, getDocumentPageCount, isSupportedDocument, MAX_DOCUMENT_PAGES, prepareDocumentInput, saveDocumentFile } from './documentStore'
 import type { AiSettings, CaseMode, ChatMessage, ComplaintDraft, ComplaintType, Conversation, FollowUpAnswer, FollowUpQuestion, Precedent, ReceivedDocument, ResponseDraft } from './types'
 import { blankDraft, blankResponseDraft, createConversation } from './types'
+import { readSharePayload } from './shareCodec'
 
 type SpeechResult = { isFinal: boolean; [index: number]: { transcript: string } }
 type SpeechRecognitionLike = {
@@ -57,7 +59,7 @@ function choiceFromShortReply(text: string): FollowUpAnswer['choice'] | undefine
   return undefined
 }
 
-export default function App() {
+function App() {
   const [conversations, setConversations] = useState<Conversation[]>(loadConversations)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [settings, setSettings] = useState<AiSettings>(loadSettings)
@@ -693,7 +695,7 @@ export default function App() {
 
     {currentMode === 'respondent'
       ? <ResponsePanel draft={responseDraft} open={previewOpen} onOpen={() => { ensureConversation(startType, 'respondent'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateResponseDraft} />
-      : <ComplaintPanel draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
+      : <ComplaintPanel key={activeId || 'new'} draft={draft} open={previewOpen} animatedFields={animatedDraftFields} onOpen={() => { ensureConversation(startType, 'complainant'); setPreviewOpen(true) }} onClose={() => setPreviewOpen(false)} onChange={updateDraft} />}
     {previewOpen && <div
       className="preview-resize-handle"
       role="separator"
@@ -717,4 +719,9 @@ export default function App() {
     <PrecedentDialog open={precedentOpen} onOpenChange={setPrecedentOpen} precedents={active?.precedents || []} onResults={updatePrecedents} />
     {notice && <div className="toast" role="status">{notice}<button aria-label="알림 닫기" onClick={() => setNotice('')}><X size={15} /></button></div>}
   </div></MotionConfig>
+}
+
+export default function AppRoot() {
+  const sharePayload = readSharePayload(window.location.hash)
+  return sharePayload ? <ShareDownload payload={sharePayload} /> : <App />
 }

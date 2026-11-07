@@ -24,7 +24,7 @@ export async function askAi(
     response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ settings, messages, draft, precedents, caseMode, responseDraft, documentInput, intakeSubmission, demo }),
+      body: JSON.stringify({ settings, messages, draft: { ...draft, documentDetails: undefined }, precedents, caseMode, responseDraft, documentInput, intakeSubmission, demo }),
       signal: AbortSignal.timeout(55000),
     })
   } catch (error) {

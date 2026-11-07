@@ -36,6 +36,7 @@ export interface ComplaintDraft {
   evidence: string
   request: string
   relatedCase: string
+  documentDetails: Record<string, string>
   selections: Record<string, string>
 }
 
@@ -166,6 +167,7 @@ export const blankDraft = (): ComplaintDraft => ({
   evidence: '',
   request: '',
   relatedCase: '',
+  documentDetails: {},
   selections: {},
 })
 

@@ -1,13 +1,15 @@
 import { useEffect, useRef, useState } from 'react'
 import * as Tabs from '@radix-ui/react-tabs'
 import { AnimatePresence, motion } from 'motion/react'
-import { ChevronLeft, FileText, Pencil, Printer, X } from 'lucide-react'
+import { ChevronLeft, FileText, Pencil, QrCode, ShieldCheck, X } from 'lucide-react'
 import type { ComplaintDraft } from '../types'
 import { templateLabels } from '../types'
 import { checklistQuestions, officialFormSource, typeQuestions } from '../formConfig'
 import ComplaintDocument from './ComplaintDocument'
+import QrDownloadDialog from './QrDownloadDialog'
+import { extraDetailFields, privateDetailFields, fillDummyPersonalInfo } from '../documentDetails'
 
-type Field = Exclude<keyof ComplaintDraft, 'type' | 'selections'>
+type Field = Exclude<keyof ComplaintDraft, 'type' | 'selections' | 'documentDetails'>
 
 const fields: { key: Field; label: string; group: string; multiline?: boolean; placeholder?: string }[] = [
   { key: 'complainantName', label: '성명', group: '고소인' },
@@ -46,16 +48,18 @@ export default function ComplaintPanel({
   onChange: (patch: Partial<ComplaintDraft>) => void
 }) {
   const [tab, setTab] = useState('preview')
+  const [qrOpen, setQrOpen] = useState(false)
+  const [savedNotice, setSavedNotice] = useState('')
   const startX = useRef<number | null>(null)
 
   useEffect(() => {
     if (!open) return
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key === 'Escape' && !qrOpen) onClose()
     }
     document.addEventListener('keydown', onKeyDown)
     return () => document.removeEventListener('keydown', onKeyDown)
-  }, [open, onClose])
+  }, [open, onClose, qrOpen])
 
   function jumpToField(field: string) {
     setTab('edit')
@@ -73,6 +77,7 @@ export default function ComplaintPanel({
 
   return (
     <>
+      <QrDownloadDialog open={qrOpen} draft={draft} onClose={() => setQrOpen(false)} />
       {!open && <button
         className="edge-handle"
         aria-label="고소장 미리보기 열기"
@@ -118,11 +123,14 @@ export default function ComplaintPanel({
                 <Tabs.Trigger value="edit"><Pencil size={16} /> 내용 수정</Tabs.Trigger>
               </Tabs.List>
               <Tabs.Content value="preview" className="panel-content panel-preview-scroll">
+                <button type="button" className="sensitive-fill-button" onClick={() => { onChange(fillDummyPersonalInfo(draft)); setSavedNotice('빈 인적사항을 더미 데이터로 채웠습니다. 기존 입력 내용은 유지됩니다.'); setTab('preview') }}><ShieldCheck size={18} /><span><strong>민감정보 한 번에 채우기</strong><small>빈 인적사항을 더미 데이터로 자동 채웁니다</small></span><ChevronLeft size={17} className="rotate-180" /></button>
+                {savedNotice && <p className="sensitive-save-notice" role="status">{savedNotice}</p>}
                 <div className="preview-notice"><span className="preview-notice-dot" /> 실시간 초안 {draft.type !== 'general' ? <a href={officialFormSource} target="_blank" rel="noreferrer">경찰청 원본 양식 보기</a> : <span className="preview-form-caveat">일반 초안 · 공식 서식과 다름</span>}<button className="preview-edit-cue" type="button" onClick={() => setTab('edit')}><Pencil size={14} /> 내용 수정</button></div>
                 <ComplaintDocument draft={draft} animatedFields={animatedFields} onFieldClick={jumpToField} />
               </Tabs.Content>
               <Tabs.Content value="edit" className="panel-content panel-edit-scroll">
                 <div className="form-intro"><strong>문서 내용 수정</strong><p>내용을 바꾸면 미리보기에 즉시 반영됩니다.</p></div>
+                <button type="button" className="sensitive-fill-button" onClick={() => { onChange(fillDummyPersonalInfo(draft)); setSavedNotice('빈 인적사항을 더미 데이터로 채웠습니다. 기존 입력 내용은 유지됩니다.'); setTab('preview') }}><ShieldCheck size={18} /><span><strong>민감정보 한 번에 채우기</strong><small>빈 인적사항을 더미 데이터로 자동 채웁니다</small></span><ChevronLeft size={17} className="rotate-180" /></button>
                 <label className="form-field"><span>고소장 종류</span><select id="draft-type" value={draft.type} onChange={(event) => onChange({ type: event.target.value as ComplaintDraft['type'] })}>
                   {Object.entries(templateLabels).map(([value, label]) => <option key={value} value={value}>{label}{value === 'general' ? '형 초안' : ' 간이 고소장'}</option>)}
                 </select></label>
@@ -151,10 +159,14 @@ export default function ComplaintPanel({
                     {draft.selections[item.id] && <button type="button" className="form-choice-clear" onClick={() => setSelection(item.id, '')}>선택 취소</button>}
                   </fieldset>)}
                 </div>}
+                <div className="form-group"><h3>추가 정보와 제출 정보</h3><p className="form-checklist-note">해당하는 항목만 입력하세요. 입력한 내용은 원본 서식 또는 별지에 반영됩니다.</p>
+                  {privateDetailFields.map((field) => <label className="form-field" key={field.key}><span>{field.label}</span><input id={`draft-details.${field.key}`} value={draft.documentDetails?.[field.key] || ''} placeholder={`${field.label} 입력`} onChange={(event) => onChange({ documentDetails: { ...draft.documentDetails, [field.key]: event.target.value } })} /></label>)}
+                  {extraDetailFields.filter((field) => (!field.types || field.types.includes(draft.type)) && (!field.when || draft.selections[field.when] === field.option || draft.documentDetails?.[field.key])).map((field) => <label className="form-field" key={field.key}><span>{field.label}</span><input id={`draft-details.${field.key}`} value={draft.documentDetails?.[field.key] || ''} placeholder={field.placeholder} onChange={(event) => onChange({ documentDetails: { ...draft.documentDetails, [field.key]: event.target.value } })} /></label>)}
+                </div>
               </Tabs.Content>
             </Tabs.Root>
             <div className="panel-footer">
-              <button className="footer-secondary" onClick={() => { setTab('preview'); window.setTimeout(() => window.print(), 80) }}><Printer size={17} /> 인쇄 / PDF 저장</button>
+              <button className="footer-secondary" onClick={() => { setTab('preview'); setQrOpen(true) }}><QrCode size={17} /> QR로 PDF 받기</button>
               <button className="footer-primary" onClick={onClose}>작성 계속하기 <ChevronLeft size={17} className="rotate-180" /></button>
             </div>
           </motion.aside>
