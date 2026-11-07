@@ -26,8 +26,8 @@ export async function createShareUrl(draft: ComplaintDraft) {
   const shareDraft = draft
   const stream = new Blob([JSON.stringify(shareDraft)]).stream().pipeThrough(new CompressionStream('gzip'))
   const compressed = new Uint8Array(await new Response(stream).arrayBuffer())
-  const isLocalHost = ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname)
-  const url = new URL(isLocalHost ? `${publicAppOrigin}${window.location.pathname}${window.location.search}` : window.location.href)
+  // Vercel preview deployments may require SSO; QR recipients must always land on the public production app.
+  const url = new URL(`${publicAppOrigin}${window.location.pathname}${window.location.search}`)
   url.hash = `${sharePrefix}${toBase64Url(compressed)}`
   return url.toString()
 }
